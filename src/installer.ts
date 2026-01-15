@@ -37,12 +37,27 @@ export async function installSkillForAgent(
   }
 }
 
+const EXCLUDE_FILES = new Set([
+  'README.md',
+  'metadata.json',
+]);
+
+const isExcluded = (name: string): boolean => {
+  if (EXCLUDE_FILES.has(name)) return true;
+  if (name.startsWith('_')) return true; // Templates, section definitions
+  return false;
+};
+
 async function copyDirectory(src: string, dest: string): Promise<void> {
   await mkdir(dest, { recursive: true });
 
   const entries = await readdir(src, { withFileTypes: true });
 
   for (const entry of entries) {
+    if (isExcluded(entry.name)) {
+      continue;
+    }
+
     const srcPath = join(src, entry.name);
     const destPath = join(dest, entry.name);
 
