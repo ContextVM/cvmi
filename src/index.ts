@@ -24,11 +24,11 @@ interface Options {
 
 program
   .name('add-skill')
-  .description('Install skills onto coding agents (OpenCode, Claude Code, Codex, Cursor, Antigravity, Roo Code)')
+  .description('Install skills onto coding agents (OpenCode, Claude Code, Codex, Cursor, Antigravity, Github Copilot, Roo Code)')
   .version(version)
   .argument('<source>', 'Git repo URL, GitHub shorthand (owner/repo), or direct path to skill')
   .option('-g, --global', 'Install skill globally (user-level) instead of project-level')
-  .option('-a, --agent <agents...>', 'Specify agents to install to (opencode, claude-code, codex, cursor, antigravity, roo)')
+  .option('-a, --agent <agents...>', 'Specify agents to install to (opencode, claude-code, codex, cursor, antigravity, gitub-copilot, roo)')
   .option('-s, --skill <skills...>', 'Specify skill names to install (skip selection prompt)')
   .option('-l, --list', 'List available skills in the repository without installing')
   .option('-y, --yes', 'Skip confirmation prompts')
@@ -134,7 +134,7 @@ let tempDir: string | null = null;
     let targetAgents: AgentType[];
 
     if (options.agent && options.agent.length > 0) {
-      const validAgents = ['opencode', 'claude-code', 'codex', 'cursor', 'antigravity', 'roo'];
+      const validAgents = ['opencode', 'claude-code', 'codex', 'cursor', 'antigravity', 'roo',  'github-copilot'];
       const invalidAgents = options.agent.filter(a => !validAgents.includes(a));
 
       if (invalidAgents.length > 0) {
@@ -152,7 +152,7 @@ let tempDir: string | null = null;
 
       if (installedAgents.length === 0) {
         if (options.yes) {
-          targetAgents = ['opencode', 'claude-code', 'codex', 'cursor', 'antigravity', 'roo'];
+          targetAgents = ['opencode', 'claude-code', 'codex', 'cursor', 'antigravity', 'roo', 'github-copilot'];
           p.log.info('Installing to all agents (none detected)');
         } else {
           p.log.warn('No coding agents detected. You can still install skills.');
