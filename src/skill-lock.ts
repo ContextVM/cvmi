@@ -140,8 +140,14 @@ export async function fetchSkillFolderHash(
       if (!response.ok) continue;
 
       const data = (await response.json()) as {
+        sha: string;
         tree: Array<{ path: string; type: string; sha: string }>;
       };
+
+      // If folderPath is empty, this is a root-level skill - use the root tree SHA
+      if (!folderPath) {
+        return data.sha;
+      }
 
       // Find the tree entry for the skill folder
       const folderEntry = data.tree.find(
