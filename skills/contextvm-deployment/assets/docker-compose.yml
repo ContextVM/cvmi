@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  contextvm-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contextvm-server
+    environment:
+      - SERVER_PRIVATE_KEY=${SERVER_PRIVATE_KEY}
+      - RELAYS=wss://relay.contextvm.org,wss://cvm.otherstuff.ai,wss://nos.lol
+      - LOG_LEVEL=info
+      - ENCRYPTION_MODE=optional
+      - IS_PUBLIC_SERVER=true
+    restart: unless-stopped
