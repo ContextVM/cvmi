@@ -14,6 +14,10 @@ import { track } from './telemetry.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// CVMI canonical remote for embedded skills
+const CVMI_CANONICAL_REPO = 'contextvm/cvmi';
+const EMBEDDED_SKILLS_SUBPATH = 'skills';
+
 function getVersion(): string {
   try {
     const pkgPath = join(__dirname, '..', 'package.json');
@@ -34,12 +38,11 @@ const DIM = '\x1b[38;5;102m'; // darker gray for secondary text
 const TEXT = '\x1b[38;5;145m'; // lighter gray for primary text
 
 const LOGO_LINES = [
-  '███████╗██╗  ██╗██╗██╗     ██╗     ███████╗',
-  '██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝',
-  '███████╗█████╔╝ ██║██║     ██║     ███████╗',
-  '╚════██║██╔═██╗ ██║██║     ██║     ╚════██║',
-  '███████║██║  ██╗██║███████╗███████╗███████║',
-  '╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝',
+  ' ▄▄·  ▌ ▐·• ▌ ▄ ·. ▪  ',
+  '▐█ ▌▪▪█·█▌·██ ▐███▪██ ',
+  '██ ▄▄▐█▐█•▐█ ▌▐▌▐█·▐█·',
+  '▐███▌ ███ ██ ██▌▐█▌▐█▌',
+  '·▀▀▀ . ▀  ▀▀  █▪▀▀▀▀▀▀',
 ];
 
 // 256-color middle grays - visible on both light and dark backgrounds
@@ -62,48 +65,44 @@ function showLogo(): void {
 function showBanner(): void {
   showLogo();
   console.log();
-  console.log(`${DIM}The open agent skills ecosystem${RESET}`);
+  console.log(`${DIM}ContextVM Interface - The open agent skills ecosystem${RESET}`);
   console.log();
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skills add ${DIM}<package>${RESET}   ${DIM}Install a skill${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx cvmi add ${DIM}[options]${RESET}       ${DIM}Install ContextVM skills${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skills list${RESET}            ${DIM}List installed skills${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx cvmi add ${DIM}<source>${RESET}       ${DIM}Install skills from a repository${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skills find ${DIM}[query]${RESET}    ${DIM}Search for skills${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx cvmi find ${DIM}[query]${RESET}      ${DIM}Search for skills${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skills check${RESET}           ${DIM}Check for updates${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx cvmi check${RESET}            ${DIM}Check for updates${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skills update${RESET}          ${DIM}Update all skills${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx cvmi update${RESET}           ${DIM}Update all skills${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skills remove${RESET}          ${DIM}Remove installed skills${RESET}`
-  );
-  console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skills init ${DIM}[name]${RESET}     ${DIM}Create a new skill${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx cvmi init ${DIM}[name]${RESET}       ${DIM}Create a new skill${RESET}`
   );
   console.log();
-  console.log(`${DIM}try:${RESET} npx skills add vercel-labs/agent-skills`);
+  console.log(`${DIM}try:${RESET} npx cvmi add`);
   console.log();
-  console.log(`Discover more skills at ${TEXT}https://skills.sh/${RESET}`);
+  console.log(`Discover more skills at ${TEXT}https://cvmi.dev/${RESET}`);
   console.log();
 }
 
 function showHelp(): void {
   console.log(`
-${BOLD}Usage:${RESET} skills <command> [options]
+${BOLD}Usage:${RESET} cvmi <command> [options]
 
 ${BOLD}Commands:${RESET}
-  add <package>     Add a skill package
-                    e.g. vercel-labs/agent-skills
-                         https://github.com/vercel-labs/agent-skills
-  remove [skills]   Remove installed skills
-  list, ls          List installed skills
   find [query]      Search for skills interactively
   init [name]       Initialize a skill (creates <name>/SKILL.md or ./SKILL.md)
+  add [package]     Add a skill package
+                     (no args: installs embedded ContextVM skills)
+                     e.g. contextvm/cvmi
+                          https://github.com/contextvm/cvmi
   check             Check for available skill updates
   update            Update all skills to latest versions
 
@@ -132,55 +131,22 @@ ${BOLD}Options:${RESET}
   --version, -v     Show version number
 
 ${BOLD}Examples:${RESET}
-  ${DIM}$${RESET} skills add vercel-labs/agent-skills
-  ${DIM}$${RESET} skills add vercel-labs/agent-skills -g
-  ${DIM}$${RESET} skills add vercel-labs/agent-skills --agent claude-code cursor
-  ${DIM}$${RESET} skills add vercel-labs/agent-skills --skill pr-review commit
-  ${DIM}$${RESET} skills remove                   ${DIM}# interactive remove${RESET}
-  ${DIM}$${RESET} skills remove web-design        ${DIM}# remove by name${RESET}
-  ${DIM}$${RESET} skills rm --global frontend-design
-  ${DIM}$${RESET} skills list                     ${DIM}# list all installed skills${RESET}
-  ${DIM}$${RESET} skills ls -g                    ${DIM}# list global skills only${RESET}
-  ${DIM}$${RESET} skills ls -a claude-code        ${DIM}# filter by agent${RESET}
-  ${DIM}$${RESET} skills find                     ${DIM}# interactive search${RESET}
-  ${DIM}$${RESET} skills find typescript          ${DIM}# search by keyword${RESET}
-  ${DIM}$${RESET} skills init my-skill
-  ${DIM}$${RESET} skills check
-  ${DIM}$${RESET} skills update
+  ${DIM}$${RESET} cvmi add                          ${DIM}# install embedded ContextVM skills${RESET}
+  ${DIM}$${RESET} cvmi add --skill contextvm-overview ${DIM}# install specific skill${RESET}
+  ${DIM}$${RESET} cvmi add contextvm/cvmi -g        ${DIM}# install from repo, global${RESET}
+  ${DIM}$${RESET} cvmi find                         ${DIM}# interactive search${RESET}
+  ${DIM}$${RESET} cvmi find typescript              ${DIM}# search by keyword${RESET}
+  ${DIM}$${RESET} cvmi init my-skill
+  ${DIM}$${RESET} cvmi add vercel-labs/agent-skills
+  ${DIM}$${RESET} cvmi add vercel-labs/agent-skills -g
+  ${DIM}$${RESET} cvmi add vercel-labs/agent-skills --agent claude-code cursor
+  ${DIM}$${RESET} cvmi add vercel-labs/agent-skills --skill pr-review commit
+  ${DIM}$${RESET} cvmi check
+  ${DIM}$${RESET} cvmi update
+  ${DIM}$${RESET} cvmi generate-lock --dry-run
 
-Discover more skills at ${TEXT}https://skills.sh/${RESET}
-`);
-}
-
-function showRemoveHelp(): void {
-  console.log(`
-${BOLD}Usage:${RESET} skills remove [skills...] [options]
-
-${BOLD}Description:${RESET}
-  Remove installed skills from agents. If no skill names are provided,
-  an interactive selection menu will be shown.
-
-${BOLD}Arguments:${RESET}
-  skills            Optional skill names to remove (space-separated)
-
-${BOLD}Options:${RESET}
-  -g, --global       Remove from global scope (~/) instead of project scope
-  -a, --agent        Remove from specific agents (use '*' for all agents)
-  -s, --skill        Specify skills to remove (use '*' for all skills)
-  -y, --yes          Skip confirmation prompts
-  --all              Shorthand for --skill '*' --agent '*' -y
-
-${BOLD}Examples:${RESET}
-  ${DIM}$${RESET} skills remove                           ${DIM}# interactive selection${RESET}
-  ${DIM}$${RESET} skills remove my-skill                   ${DIM}# remove specific skill${RESET}
-  ${DIM}$${RESET} skills remove skill1 skill2 -y           ${DIM}# remove multiple skills${RESET}
-  ${DIM}$${RESET} skills remove --global my-skill          ${DIM}# remove from global scope${RESET}
-  ${DIM}$${RESET} skills rm --agent claude-code my-skill   ${DIM}# remove from specific agent${RESET}
-  ${DIM}$${RESET} skills remove --all                      ${DIM}# remove all skills${RESET}
-  ${DIM}$${RESET} skills remove --skill '*' -a cursor      ${DIM}# remove all skills from cursor${RESET}
-
-Discover more skills at ${TEXT}https://skills.sh/${RESET}
-`);
+Discover more skills at ${TEXT}https://cvmi.dev/${RESET}
+  `);
 }
 
 function runInit(args: string[]): void {
@@ -236,13 +202,13 @@ Describe when this skill should be used.
   console.log();
   console.log(`${DIM}Publishing:${RESET}`);
   console.log(
-    `  ${DIM}GitHub:${RESET}  Push to a repo, then ${TEXT}npx skills add <owner>/<repo>${RESET}`
+    `  ${DIM}GitHub:${RESET}  Push to a repo, then ${TEXT}npx cvmi add <owner>/<repo>${RESET}`
   );
   console.log(
-    `  ${DIM}URL:${RESET}     Host the file, then ${TEXT}npx skills add https://example.com/${displayPath}${RESET}`
+    `  ${DIM}URL:${RESET}     Host the file, then ${TEXT}npx cvmi add https://example.com/${displayPath}${RESET}`
   );
   console.log();
-  console.log(`Browse existing skills for inspiration at ${TEXT}https://skills.sh/${RESET}`);
+  console.log(`Browse existing skills for inspiration at ${TEXT}https://cvmi.dev/${RESET}`);
   console.log();
 }
 
@@ -335,7 +301,7 @@ async function runCheck(args: string[] = []): Promise<void> {
 
   if (skillNames.length === 0) {
     console.log(`${DIM}No skills tracked in lock file.${RESET}`);
-    console.log(`${DIM}Install skills with${RESET} ${TEXT}npx skills add <package>${RESET}`);
+    console.log(`${DIM}Install skills with${RESET} ${TEXT}npx cvmi add <package>${RESET}`);
     return;
   }
 
@@ -393,7 +359,7 @@ async function runCheck(args: string[] = []): Promise<void> {
       }
       console.log();
       console.log(
-        `${DIM}Run${RESET} ${TEXT}npx skills update${RESET} ${DIM}to update all skills${RESET}`
+        `${DIM}Run${RESET} ${TEXT}npx cvmi update${RESET} ${DIM}to update all skills${RESET}`
       );
     }
 
@@ -429,7 +395,7 @@ async function runUpdate(): Promise<void> {
 
   if (skillNames.length === 0) {
     console.log(`${DIM}No skills tracked in lock file.${RESET}`);
-    console.log(`${DIM}Install skills with${RESET} ${TEXT}npx skills add <package>${RESET}`);
+    console.log(`${DIM}Install skills with${RESET} ${TEXT}npx cvmi add <package>${RESET}`);
     return;
   }
 
@@ -499,10 +465,10 @@ async function runUpdate(): Promise<void> {
 
     console.log(`${TEXT}Updating ${update.name}...${RESET}`);
 
-    // Use skills CLI to reinstall with -g -y flags
+    // Use cvmi CLI to reinstall with -g -y flags
     const result = spawnSync(
       'npx',
-      ['-y', 'skills', entry.sourceUrl, '--skill', update.name, '-g', '-y'],
+      ['-y', 'cvmi', entry.sourceUrl, '--skill', update.name, '-g', '-y'],
       {
         stdio: ['inherit', 'pipe', 'pipe'],
       }
@@ -571,7 +537,12 @@ async function main(): Promise<void> {
     case 'add': {
       showLogo();
       const { source, options } = parseAddOptions(restArgs);
-      await runAdd(source, options);
+
+      // CVMI v0: If no source is provided, default to canonical remote with embedded skills subpath
+      const useEmbeddedSkills = source.length === 0;
+      const effectiveSource = useEmbeddedSkills ? CVMI_CANONICAL_REPO : source[0]!;
+
+      await runAdd([effectiveSource], options, useEmbeddedSkills);
       break;
     }
     case 'remove':
@@ -607,7 +578,7 @@ async function main(): Promise<void> {
 
     default:
       console.log(`Unknown command: ${command}`);
-      console.log(`Run ${BOLD}skills --help${RESET} for usage.`);
+      console.log(`Run ${BOLD}cvmi --help${RESET} for usage.`);
   }
 }
 

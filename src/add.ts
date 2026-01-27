@@ -2,6 +2,12 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
+import {
+  parseSource,
+  getOwnerRepo,
+  CVMI_CANONICAL_REPO,
+  EMBEDDED_SKILLS_SUBPATH,
+} from './source-parser.ts';
 import { sep } from 'path';
 import { parseSource, getOwnerRepo, parseOwnerRepo, isRepoPrivate } from './source-parser.ts';
 
@@ -1362,8 +1368,18 @@ async function handleDirectUrlSkillLegacy(
   await promptForFindSkills(options);
 }
 
-export async function runAdd(args: string[], options: AddOptions = {}): Promise<void> {
-  const source = args[0];
+/**
+ * Run cvmi add command.
+ * @param args - Command arguments
+ * @param options - Add options
+ * @param useEmbeddedSkillsSubpath - If true, use the embedded skills subpath for the canonical repo
+ */
+export async function runAdd(
+  args: string[],
+  options: AddOptions = {},
+  useEmbeddedSkillsSubpath: boolean = false
+): Promise<void> {
+  let source = args[0];
   let installTipShown = false;
 
   const showInstallTip = (): void => {
@@ -1375,18 +1391,23 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
   };
 
   if (!source) {
-    console.log();
-    console.log(
-      pc.bgRed(pc.white(pc.bold(' ERROR '))) + ' ' + pc.red('Missing required argument: source')
-    );
-    console.log();
-    console.log(pc.dim('  Usage:'));
-    console.log(`    ${pc.cyan('npx skills add')} ${pc.yellow('<source>')} ${pc.dim('[options]')}`);
-    console.log();
-    console.log(pc.dim('  Example:'));
-    console.log(`    ${pc.cyan('npx skills add')} ${pc.yellow('vercel-labs/agent-skills')}`);
-    console.log();
-    process.exit(1);
+    // CVMI v0: If no source, use canonical remote with embedded skills
+    if (useEmbeddedSkillsSubpath) {
+      source = CVMI_CANONICAL_REPO;
+    } else {
+      console.log();
+      console.log(
+        pc.bgRed(pc.white(pc.bold(' ERROR '))) + ' ' + pc.red('Missing required argument: source')
+      );
+      console.log();
+      console.log(pc.dim('  Usage:'));
+      console.log(`    ${pc.cyan('npx cvmi add')} ${pc.yellow('<source>')} ${pc.dim('[options]')}`);
+      console.log();
+      console.log(pc.dim('  Example:'));
+      console.log(`    ${pc.cyan('npx cvmi add')} ${pc.yellow('contextvm/cvmi')}`);
+      console.log();
+      process.exit(1);
+    }
   }
 
   // --all implies --skill '*' and --agent '*' and -y
@@ -1397,7 +1418,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
   }
 
   console.log();
-  p.intro(pc.bgCyan(pc.black(' skills ')));
+  p.intro(pc.bgCyan(pc.black(' cvmi ')));
 
   if (!process.stdin.isTTY) {
     showInstallTip();
@@ -1409,7 +1430,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     const spinner = p.spinner();
 
     spinner.start('Parsing source...');
-    const parsed = parseSource(source);
+    const parsed = parseSource(source!);
     spinner.stop(
       `Source: ${parsed.type === 'local' ? parsed.localPath! : parsed.url}${parsed.ref ? ` @ ${pc.yellow(parsed.ref)}` : ''}${parsed.subpath ? ` (${parsed.subpath})` : ''}${parsed.skillFilter ? ` ${pc.dim('@')}${pc.cyan(parsed.skillFilter)}` : ''}`
     );
@@ -1459,7 +1480,14 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     // (via --skill or @skill syntax)
     const includeInternal = !!(options.skill && options.skill.length > 0);
 
+    // Determine the subpath for skill discovery
+    // If useEmbeddedSkillsSubpath is true and no explicit subpath from parsed source,
+    // use the embedded skills subpath
+    const effectiveSubpath =
+      useEmbeddedSkillsSubpath && !parsed.subpath ? EMBEDDED_SKILLS_SUBPATH : parsed.subpath;
+
     spinner.start('Discovering skills...');
+    const skills = await discoverSkills(skillsDir, effectiveSubpath, { includeInternal });
     const skills = await discoverSkills(skillsDir, parsed.subpath, {
       includeInternal,
       fullDepth: options.fullDepth,

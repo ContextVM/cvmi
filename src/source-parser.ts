@@ -1,6 +1,10 @@
 import { isAbsolute, resolve } from 'path';
 import type { ParsedSource } from './types.ts';
 
+// CVMI canonical remote for embedded skills
+export const CVMI_CANONICAL_REPO = 'contextvm/cvmi';
+export const EMBEDDED_SKILLS_SUBPATH = 'skills';
+
 /**
  * Extract owner/repo from a parsed source for telemetry.
  * Returns null for local paths or unparseable sources.
