@@ -1,5 +1,5 @@
 ---
-name: contextvm-concepts
+name: concepts
 description: Understand ContextVM core concepts, architecture decisions, and frequently asked questions. Use when users need clarification on what ContextVM is, why it uses Nostr, decentralization benefits, public vs private servers, network topology, or comparisons with traditional MCP.
 ---
 
@@ -153,7 +153,7 @@ Use `@contextvm/sdk` for TypeScript applications with `NostrServerTransport` and
 
 ## References
 
-- [`../contextvm-overview/SKILL.md`](../contextvm-overview/SKILL.md) — Protocol overview
-- [`../contextvm-server-dev/references/gateway-pattern.md`](../contextvm-server-dev/references/gateway-pattern.md) — Gateway usage
+- [`../overview/SKILL.md`](../overview/SKILL.md) — Protocol overview
+- [`../server-dev/references/gateway-pattern.md`](../server-dev/references/gateway-pattern.md) — Gateway usage
 - [ContextVM Docs](https://docs.contextvm.org)
 - [GitHub](https://github.com/contextvm)

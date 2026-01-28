@@ -51,7 +51,7 @@ main();
 ```json
 {
   "mcpServers": {
-    "contextvm-bridge": {
+    "cvm-bridge": {
       "command": "bun",
       "args": ["run", "/path/to/proxy.ts"]
     }

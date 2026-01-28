@@ -32,7 +32,7 @@ async function main() {
 
   // 2. Create MCP server
   const server = new McpServer({
-    name: "contextvm-starter-server",
+    name: "cvm-starter-server",
     version: "1.0.0",
   });
 

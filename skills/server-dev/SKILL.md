@@ -1,5 +1,5 @@
 ---
-name: contextvm-server-dev
+name: server-dev
 description: Build MCP servers that expose capabilities over the Nostr network using ContextVM. Use when creating new servers, converting existing MCP servers to ContextVM, configuring server transports, implementing access control, or setting up public server announcements.
 ---
 

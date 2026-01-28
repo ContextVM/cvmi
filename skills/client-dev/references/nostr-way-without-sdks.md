@@ -259,8 +259,8 @@ Both are "RPC over Nostr" with different organizing principles:
 ## References
 
 ### ContextVM Documentation
-- [`../contextvm-overview/references/ceps.md`](../contextvm-overview/references/ceps.md) — CEP-4 encryption specification
-- [`../contextvm-overview/references/protocol-spec.md`](../contextvm-overview/references/protocol-spec.md) — Full protocol specification
+- [`../overview/references/ceps.md`](../overview/references/ceps.md) — CEP-4 encryption specification
+- [`../overview/references/protocol-spec.md`](../overview/references/protocol-spec.md) — Full protocol specification
 
 ### MCP (Model Context Protocol)
 - [MCP Specification](https://spec.modelcontextprotocol.io/) — Complete JSON-RPC schema definitions

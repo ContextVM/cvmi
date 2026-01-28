@@ -1,23 +1,22 @@
 # AGENTS.md
 
-This file provides guidance to AI coding agents working on the `skills` CLI codebase.
+This file provides guidance to AI coding agents working on the `cvmi` CLI codebase.
 
 ## Project Overview
 
-`skills` is the CLI for the open agent skills ecosystem.
+`cvmi` is the CLI for the ContextVM skills ecosystem.
 
 ## Commands
 
-| Command              | Description                                         |
-| -------------------- | --------------------------------------------------- |
-| `skills`             | Show banner with available commands                 |
-| `skills init [name]` | Create a new SKILL.md template                      |
-| `skills add <pkg>`   | Install skills from git repos, URLs, or local paths |
-| `skills list`        | List installed skills (alias: `ls`)                 |
-| `skills check`       | Check for available skill updates                   |
-| `skills update`      | Update all skills to latest versions                |
+| Command | Description |
+|---------|-------------|
+| `cvmi` | Show banner with available commands |
+| `cvmi add <pkg>` | Install skills from git repos, URLs, or local paths |
+| `cvmi check` | Check for available skill updates |
+| `cvmi update` | Update all skills to latest versions |
+| `cvmi generate-lock` | Match installed skills to sources via API |
 
-Aliases: `skills a`, `skills i`, `skills install` all work for `add`. `skills ls` works for `list`.
+Aliases: `cvmi a`, `cvmi i`, `cvmi install` all work for `add`.
 
 ## Architecture
 
@@ -60,7 +59,7 @@ tests/
 
 ## Update Checking System
 
-### How `skills check` and `skills update` Work
+### How `cvmi check` and `cvmi update` Work
 
 1. Read `~/.agents/.skill-lock.json` for installed skills
 2. For each skill, get `skillFolderHash` from lock file
@@ -76,7 +75,7 @@ tests/
 
 ### Why `forceRefresh: true`?
 
-Both `check` and `update` always send `forceRefresh: true`. This ensures the API fetches fresh content from GitHub rather than using its Redis cache.
+Both `cvmi check` and `cvmi update` always send `forceRefresh: true`. This ensures the API fetches fresh content from GitHub rather than using its Redis cache.
 
 **Without forceRefresh:** Users saw phantom "updates available" due to stale cached hashes. The fix was to always fetch fresh.
 
@@ -90,11 +89,12 @@ If reading an older lock file version, it's wiped. Users must reinstall skills t
 
 ## Key Integration Points
 
-| Feature          | Implementation                              |
-| ---------------- | ------------------------------------------- |
-| `skills add`     | `src/add.ts` - full implementation          |
-| `skills check`   | `POST /check-updates` API                   |
-| `skills update`  | `POST /check-updates` + reinstall per skill |
+| Feature | Implementation |
+|---------|---------------|
+| `cvmi add` | `src/add.ts` - full implementation |
+| `cvmi check` | `POST /check-updates` API |
+| `cvmi update` | `POST /check-updates` + reinstall per skill |
+| `cvmi generate-lock` | `POST /api/skills/search` on skills.sh |
 
 ## Development
 
@@ -106,10 +106,9 @@ pnpm install
 pnpm build
 
 # Test locally
-pnpm dev add vercel-labs/agent-skills --list
+pnpm dev add contextvm/cvmi --list
 pnpm dev check
 pnpm dev update
-pnpm dev init my-skill
 
 # Run all tests
 pnpm test

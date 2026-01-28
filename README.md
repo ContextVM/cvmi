@@ -11,7 +11,7 @@
 npx cvmi add
 
 # Install a specific skill from the ContextVM repository
-npx cvmi add --skill contextvm-overview
+npx cvmi add --skill overview
 ```
 
 ## Roadmap

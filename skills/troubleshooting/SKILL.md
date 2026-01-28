@@ -1,5 +1,5 @@
 ---
-name: contextvm-troubleshooting
+name: troubleshooting
 description: Diagnose and resolve ContextVM connection issues, relay problems, encryption failures, authentication errors, and common deployment problems. Use when users report errors, connection failures, timeout issues, or unexpected behavior with ContextVM clients, servers, gateways, or proxies.
 ---
 
@@ -270,9 +270,9 @@ Use a Nostr event validator to check:
 
 ## References
 
-- [`../contextvm-overview/references/ceps.md`](../contextvm-overview/references/ceps.md) — CEP-4 encryption details
-- [`../contextvm-overview/references/protocol-spec.md`](../contextvm-overview/references/protocol-spec.md) — Event structure
-- [`../contextvm-client-dev/references/nostr-way-without-sdks.md`](../contextvm-client-dev/references/nostr-way-without-sdks.md) — Raw Nostr implementation
-- [`../contextvm-server-dev/references/debugging-inspector.md`](../contextvm-server-dev/references/debugging-inspector.md) — MCP Inspector usage
+- [`../overview/references/ceps.md`](../overview/references/ceps.md) — CEP-4 encryption details
+- [`../overview/references/protocol-spec.md`](../overview/references/protocol-spec.md) — Event structure
+- [`../client-dev/references/nostr-way-without-sdks.md`](../client-dev/references/nostr-way-without-sdks.md) — Raw Nostr implementation
+- [`../server-dev/references/debugging-inspector.md`](../server-dev/references/debugging-inspector.md) — MCP Inspector usage
 - [NIP-44](https://github.com/nostr-protocol/nips/blob/master/44.md) — Encryption specification
 - [NIP-59](https://github.com/nostr-protocol/nips/blob/master/59.md) — Gift wrap specification

@@ -1,5 +1,5 @@
 ---
-name: contextvm-deployment
+name: deployment
 description: Deploy ContextVM servers and clients in production environments. Use when setting up production deployments, configuring Docker containers, managing environment variables, choosing relay configurations, or monitoring running services.
 ---
 
@@ -54,7 +54,7 @@ CMD ["bun", "run", "server.ts"]
 ```yaml
 version: "3.8"
 services:
-  contextvm-server:
+  cvm-server:
     build: .
     environment:
       - SERVER_PRIVATE_KEY=${SERVER_PRIVATE_KEY}

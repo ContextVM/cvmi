@@ -65,7 +65,7 @@ function showLogo(): void {
 function showBanner(): void {
   showLogo();
   console.log();
-  console.log(`${DIM}ContextVM Interface - The open agent skills ecosystem${RESET}`);
+  console.log(`${DIM}cvmi - The ContextVM skills ecosystem${RESET}`);
   console.log();
   console.log(
     `  ${DIM}$${RESET} ${TEXT}npx cvmi add ${DIM}[options]${RESET}       ${DIM}Install ContextVM skills${RESET}`
@@ -122,12 +122,9 @@ ${BOLD}Options:${RESET}
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi add                          ${DIM}# install embedded ContextVM skills${RESET}
-  ${DIM}$${RESET} cvmi add --skill contextvm-overview ${DIM}# install specific skill${RESET}
+  ${DIM}$${RESET} cvmi add --skill overview ${DIM}# install specific skill${RESET}
   ${DIM}$${RESET} cvmi add contextvm/cvmi -g        ${DIM}# install from repo, global${RESET}
-  ${DIM}$${RESET} cvmi add vercel-labs/agent-skills
-  ${DIM}$${RESET} cvmi add vercel-labs/agent-skills -g
-  ${DIM}$${RESET} cvmi add vercel-labs/agent-skills --agent claude-code cursor
-  ${DIM}$${RESET} cvmi add vercel-labs/agent-skills --skill pr-review commit
+  ${DIM}$${RESET} cvmi add contextvm/cvmi --skill troubleshooting ${DIM}# specific skill from repo${RESET}
   ${DIM}$${RESET} cvmi check
   ${DIM}$${RESET} cvmi update
   ${DIM}$${RESET} cvmi generate-lock --dry-run

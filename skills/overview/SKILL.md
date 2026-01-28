@@ -1,5 +1,5 @@
 ---
-name: contextvm-overview
+name: overview
 description: Understand ContextVM protocol fundamentals, architecture, and core concepts. Use when users need to learn about ContextVM basics, how it bridges MCP with Nostr, protocol design principles, event kinds, or the relationship between MCP and Nostr in decentralized communication.
 ---
 
@@ -105,7 +105,7 @@ ContextVM follows the same core pattern as other Nostr-based RPC systems (like D
 
 To understand this foundation:
 
-- Read [`references/nostr-way-without-sdks.md`](../contextvm-client-dev/references/nostr-way-without-sdks.md) — The Nostr primitives behind CVM (for non-SDK implementations)
+- Read [`references/nostr-way-without-sdks.md`](../client-dev/references/nostr-way-without-sdks.md) — The Nostr primitives behind CVM (for non-SDK implementations)
 
 ## Reference Materials
 
@@ -122,14 +122,14 @@ Use this decision table to jump to the right component / skill:
 | Goal                                               | Recommended path                     | Skill                                                                                                            |
 | -------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | Learn the protocol and message kinds               | Read spec + CEPs                     | [`SKILL.md`](SKILL.md) + [`references/protocol-spec.md`](references/protocol-spec.md)                            |
-| Understand core concepts, architecture, FAQs       | Concepts and architectural overview  | [`../contextvm-concepts/SKILL.md`](../contextvm-concepts/SKILL.md)                                               |
-| Build a new ContextVM-native server                | `McpServer` + `NostrServerTransport` | [`../contextvm-server-dev/SKILL.md`](../contextvm-server-dev/SKILL.md)                                           |
-| Build a new ContextVM-native client                | `Client` + `NostrClientTransport`    | [`../contextvm-client-dev/SKILL.md`](../contextvm-client-dev/SKILL.md)                                           |
-| Bridge an existing MCP server to Nostr             | Gateway pattern (`NostrMCPGateway`)  | [`../contextvm-server-dev/references/gateway-pattern.md`](../contextvm-server-dev/references/gateway-pattern.md) |
-| Bridge an existing MCP client to Nostr             | Proxy pattern (`NostrMCPProxy`)      | [`../contextvm-client-dev/references/proxy-pattern.md`](../contextvm-client-dev/references/proxy-pattern.md)     |
-| SDK-level details (interfaces, constants, logging) | `@contextvm/sdk` reference           | [`../contextvm-typescript-sdk/SKILL.md`](../contextvm-typescript-sdk/SKILL.md)                                   |
-| Production operations (keys, Docker, monitoring)   | Deployment checklist                 | [`../contextvm-deployment/SKILL.md`](../contextvm-deployment/SKILL.md)                                           |
-| Diagnose connection issues, errors, failures       | Troubleshooting guide                | [`../contextvm-troubleshooting/SKILL.md`](../contextvm-troubleshooting/SKILL.md)                                 |
+| Understand core concepts, architecture, FAQs       | Concepts and architectural overview  | [`../concepts/SKILL.md`](../concepts/SKILL.md)                                               |
+| Build a new ContextVM-native server                | `McpServer` + `NostrServerTransport` | [`../server-dev/SKILL.md`](../server-dev/SKILL.md)                                           |
+| Build a new ContextVM-native client                | `Client` + `NostrClientTransport`    | [`../client-dev/SKILL.md`](../client-dev/SKILL.md)                                           |
+| Bridge an existing MCP server to Nostr             | Gateway pattern (`NostrMCPGateway`)  | [`../server-dev/references/gateway-pattern.md`](../server-dev/references/gateway-pattern.md) |
+| Bridge an existing MCP client to Nostr             | Proxy pattern (`NostrMCPProxy`)      | [`../client-dev/references/proxy-pattern.md`](../client-dev/references/proxy-pattern.md)     |
+| SDK-level details (interfaces, constants, logging) | `@contextvm/sdk` reference           | [`../typescript-sdk/SKILL.md`](../typescript-sdk/SKILL.md)                                   |
+| Production operations (keys, Docker, monitoring)   | Deployment checklist                 | [`../deployment/SKILL.md`](../deployment/SKILL.md)                                           |
+| Diagnose connection issues, errors, failures       | Troubleshooting guide                | [`../troubleshooting/SKILL.md`](../troubleshooting/SKILL.md)                                 |
 
 Useful public entry points:
 

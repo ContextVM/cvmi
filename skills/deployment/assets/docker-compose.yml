@@ -1,11 +1,11 @@
 version: "3.8"
 
 services:
-  contextvm-server:
+  cvm-server:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: contextvm-server
+    container_name: cvm-server
     environment:
       - SERVER_PRIVATE_KEY=${SERVER_PRIVATE_KEY}
       - RELAYS=wss://relay.contextvm.org,wss://cvm.otherstuff.ai,wss://nos.lol

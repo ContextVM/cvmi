@@ -43,7 +43,7 @@ async function main() {
 
   // 3. Create and connect MCP client
   const client = new Client({
-    name: "contextvm-starter-client",
+    name: "cvm-starter-client",
     version: "1.0.0",
   });
 
