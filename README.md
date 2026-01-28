@@ -24,7 +24,7 @@ npx skills add vercel-labs/agent-skills
 npx skills add https://github.com/vercel-labs/agent-skills
 
 # Direct path to a skill in a repo
-npx skills add https://github.com/vercel-labs/agent-skills/tree/main/skills/frontend-design
+npx skills add https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines
 
 # GitLab URL
 npx skills add https://gitlab.com/org/repo
