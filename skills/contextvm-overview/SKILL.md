@@ -99,6 +99,14 @@ ContextVM uses these Nostr event kinds:
 - Negotiated during initialization
 - Servers advertise support via `support_encryption` tag
 
+## The Nostr Way
+
+ContextVM follows the same core pattern as other Nostr-based RPC systems (like DVMs): publish a signed request event, listen for a correlated response. The difference is in the message structure—CVM uses JSON-RPC via MCP rather than provider-specific payloads.
+
+To understand this foundation:
+
+- Read [`references/nostr-way-without-sdks.md`](../contextvm-client-dev/references/nostr-way-without-sdks.md) — The Nostr primitives behind CVM (for non-SDK implementations)
+
 ## Reference Materials
 
 For detailed specifications, see:
@@ -114,12 +122,14 @@ Use this decision table to jump to the right component / skill:
 | Goal                                               | Recommended path                     | Skill                                                                                                            |
 | -------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | Learn the protocol and message kinds               | Read spec + CEPs                     | [`SKILL.md`](SKILL.md) + [`references/protocol-spec.md`](references/protocol-spec.md)                            |
+| Understand core concepts, architecture, FAQs       | Concepts and architectural overview  | [`../contextvm-concepts/SKILL.md`](../contextvm-concepts/SKILL.md)                                               |
 | Build a new ContextVM-native server                | `McpServer` + `NostrServerTransport` | [`../contextvm-server-dev/SKILL.md`](../contextvm-server-dev/SKILL.md)                                           |
 | Build a new ContextVM-native client                | `Client` + `NostrClientTransport`    | [`../contextvm-client-dev/SKILL.md`](../contextvm-client-dev/SKILL.md)                                           |
 | Bridge an existing MCP server to Nostr             | Gateway pattern (`NostrMCPGateway`)  | [`../contextvm-server-dev/references/gateway-pattern.md`](../contextvm-server-dev/references/gateway-pattern.md) |
 | Bridge an existing MCP client to Nostr             | Proxy pattern (`NostrMCPProxy`)      | [`../contextvm-client-dev/references/proxy-pattern.md`](../contextvm-client-dev/references/proxy-pattern.md)     |
 | SDK-level details (interfaces, constants, logging) | `@contextvm/sdk` reference           | [`../contextvm-typescript-sdk/SKILL.md`](../contextvm-typescript-sdk/SKILL.md)                                   |
 | Production operations (keys, Docker, monitoring)   | Deployment checklist                 | [`../contextvm-deployment/SKILL.md`](../contextvm-deployment/SKILL.md)                                           |
+| Diagnose connection issues, errors, failures       | Troubleshooting guide                | [`../contextvm-troubleshooting/SKILL.md`](../contextvm-troubleshooting/SKILL.md)                                 |
 
 Useful public entry points:
 

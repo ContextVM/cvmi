@@ -20,13 +20,6 @@ describe('add command', () => {
     }
   });
 
-  it('should show error when no source provided', () => {
-    const result = runCli(['add'], testDir);
-    expect(result.stdout).toContain('ERROR');
-    expect(result.stdout).toContain('Missing required argument: source');
-    expect(result.exitCode).toBe(1);
-  });
-
   it('should show error for non-existent local path', () => {
     const result = runCli(['add', './non-existent-path', '-y'], testDir);
     expect(result.stdout).toContain('Local path does not exist');
@@ -139,18 +132,6 @@ description: Test
     const result = runCli(['add', testDir, '-y', '--agent', 'invalid-agent'], testDir);
     expect(result.stdout).toContain('Invalid agents');
     expect(result.exitCode).toBe(1);
-  });
-
-  it('should support add command aliases (a, i, install)', () => {
-    // Test that aliases work (just check they don't error unexpectedly)
-    const resultA = runCli(['a'], testDir);
-    const resultI = runCli(['i'], testDir);
-    const resultInstall = runCli(['install'], testDir);
-
-    // All should show the same "missing source" error
-    expect(resultA.stdout).toContain('Missing required argument: source');
-    expect(resultI.stdout).toContain('Missing required argument: source');
-    expect(resultInstall.stdout).toContain('Missing required argument: source');
   });
 
   describe('internal skills', () => {

@@ -74,21 +74,13 @@ function showBanner(): void {
     `  ${DIM}$${RESET} ${TEXT}npx cvmi add ${DIM}<source>${RESET}       ${DIM}Install skills from a repository${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx cvmi find ${DIM}[query]${RESET}      ${DIM}Search for skills${RESET}`
-  );
-  console.log(
     `  ${DIM}$${RESET} ${TEXT}npx cvmi check${RESET}            ${DIM}Check for updates${RESET}`
   );
   console.log(
     `  ${DIM}$${RESET} ${TEXT}npx cvmi update${RESET}           ${DIM}Update all skills${RESET}`
   );
-  console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx cvmi init ${DIM}[name]${RESET}       ${DIM}Create a new skill${RESET}`
-  );
   console.log();
   console.log(`${DIM}try:${RESET} npx cvmi add`);
-  console.log();
-  console.log(`Discover more skills at ${TEXT}https://cvmi.dev/${RESET}`);
   console.log();
 }
 
@@ -97,8 +89,6 @@ function showHelp(): void {
 ${BOLD}Usage:${RESET} cvmi <command> [options]
 
 ${BOLD}Commands:${RESET}
-  find [query]      Search for skills interactively
-  init [name]       Initialize a skill (creates <name>/SKILL.md or ./SKILL.md)
   add [package]     Add a skill package
                      (no args: installs embedded ContextVM skills)
                      e.g. contextvm/cvmi
@@ -134,9 +124,6 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi add                          ${DIM}# install embedded ContextVM skills${RESET}
   ${DIM}$${RESET} cvmi add --skill contextvm-overview ${DIM}# install specific skill${RESET}
   ${DIM}$${RESET} cvmi add contextvm/cvmi -g        ${DIM}# install from repo, global${RESET}
-  ${DIM}$${RESET} cvmi find                         ${DIM}# interactive search${RESET}
-  ${DIM}$${RESET} cvmi find typescript              ${DIM}# search by keyword${RESET}
-  ${DIM}$${RESET} cvmi init my-skill
   ${DIM}$${RESET} cvmi add vercel-labs/agent-skills
   ${DIM}$${RESET} cvmi add vercel-labs/agent-skills -g
   ${DIM}$${RESET} cvmi add vercel-labs/agent-skills --agent claude-code cursor
@@ -144,72 +131,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi check
   ${DIM}$${RESET} cvmi update
   ${DIM}$${RESET} cvmi generate-lock --dry-run
-
-Discover more skills at ${TEXT}https://cvmi.dev/${RESET}
   `);
-}
-
-function runInit(args: string[]): void {
-  const cwd = process.cwd();
-  const skillName = args[0] || basename(cwd);
-  const hasName = args[0] !== undefined;
-
-  const skillDir = hasName ? join(cwd, skillName) : cwd;
-  const skillFile = join(skillDir, 'SKILL.md');
-  const displayPath = hasName ? `${skillName}/SKILL.md` : 'SKILL.md';
-
-  if (existsSync(skillFile)) {
-    console.log(`${TEXT}Skill already exists at ${DIM}${displayPath}${RESET}`);
-    return;
-  }
-
-  if (hasName) {
-    mkdirSync(skillDir, { recursive: true });
-  }
-
-  const skillContent = `---
-name: ${skillName}
-description: A brief description of what this skill does
----
-
-# ${skillName}
-
-Instructions for the agent to follow when this skill is activated.
-
-## When to use
-
-Describe when this skill should be used.
-
-## Instructions
-
-1. First step
-2. Second step
-3. Additional steps as needed
-`;
-
-  writeFileSync(skillFile, skillContent);
-
-  console.log(`${TEXT}Initialized skill: ${DIM}${skillName}${RESET}`);
-  console.log();
-  console.log(`${DIM}Created:${RESET}`);
-  console.log(`  ${displayPath}`);
-  console.log();
-  console.log(`${DIM}Next steps:${RESET}`);
-  console.log(`  1. Edit ${TEXT}${displayPath}${RESET} to define your skill instructions`);
-  console.log(
-    `  2. Update the ${TEXT}name${RESET} and ${TEXT}description${RESET} in the frontmatter`
-  );
-  console.log();
-  console.log(`${DIM}Publishing:${RESET}`);
-  console.log(
-    `  ${DIM}GitHub:${RESET}  Push to a repo, then ${TEXT}npx cvmi add <owner>/<repo>${RESET}`
-  );
-  console.log(
-    `  ${DIM}URL:${RESET}     Host the file, then ${TEXT}npx cvmi add https://example.com/${displayPath}${RESET}`
-  );
-  console.log();
-  console.log(`Browse existing skills for inspiration at ${TEXT}https://cvmi.dev/${RESET}`);
-  console.log();
 }
 
 // ============================================
@@ -518,19 +440,6 @@ async function main(): Promise<void> {
   const restArgs = args.slice(1);
 
   switch (command) {
-    case 'find':
-    case 'search':
-    case 'f':
-    case 's':
-      showLogo();
-      console.log();
-      await runFind(restArgs);
-      break;
-    case 'init':
-      showLogo();
-      console.log();
-      runInit(restArgs);
-      break;
     case 'i':
     case 'install':
     case 'a':

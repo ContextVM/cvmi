@@ -603,9 +603,6 @@ async function handleRemoteSkill(
 
   console.log();
   p.outro(pc.green('Done!'));
-
-  // Prompt for find-skills after successful install
-  await promptForFindSkills(options);
 }
 
 /**
@@ -1051,9 +1048,6 @@ async function handleWellKnownSkills(
 
   console.log();
   p.outro(pc.green('Done!'));
-
-  // Prompt for find-skills after successful install
-  await promptForFindSkills(options);
 }
 
 /**
@@ -1363,9 +1357,6 @@ async function handleDirectUrlSkillLegacy(
 
   console.log();
   p.outro(pc.green('Done!'));
-
-  // Prompt for find-skills after successful install
-  await promptForFindSkills(options);
 }
 
 /**
@@ -1950,9 +1941,6 @@ export async function runAdd(
 
     console.log();
     p.outro(pc.green('Done!'));
-
-    // Prompt for find-skills after successful install
-    await promptForFindSkills(options);
   } catch (error) {
     if (error instanceof GitCloneError) {
       p.log.error(pc.red('Failed to clone repository'));
@@ -1978,75 +1966,6 @@ async function cleanup(tempDir: string | null) {
     } catch {
       // Ignore cleanup errors
     }
-  }
-}
-
-/**
- * Prompt user to install the find-skills skill after their first installation.
- * This helps users discover skills via their coding agent.
- * The prompt is only shown once - if dismissed, it's stored in the lock file.
- *
- * @param options - Installation options, used to check for -y/--yes flag
- */
-async function promptForFindSkills(options?: AddOptions): Promise<void> {
-  // Skip if already dismissed or not in interactive mode
-  if (!process.stdin.isTTY) return;
-  if (options?.yes) return;
-
-  try {
-    const dismissed = await isPromptDismissed('findSkillsPrompt');
-    if (dismissed) return;
-
-    // Check if find-skills is already installed
-    const findSkillsInstalled = await isSkillInstalled('find-skills', 'claude-code', {
-      global: true,
-    });
-    if (findSkillsInstalled) {
-      // Mark as dismissed so we don't check again
-      await dismissPrompt('findSkillsPrompt');
-      return;
-    }
-
-    console.log();
-    p.log.message(pc.dim("One-time prompt - you won't be asked again if you dismiss."));
-    const install = await p.confirm({
-      message: `Install the ${pc.cyan('find-skills')} skill? It helps your agent discover and suggest skills.`,
-    });
-
-    if (p.isCancel(install)) {
-      await dismissPrompt('findSkillsPrompt');
-      return;
-    }
-
-    if (install) {
-      // Install find-skills globally to all agents
-      // Mark as dismissed first to prevent recursive prompts
-      await dismissPrompt('findSkillsPrompt');
-
-      console.log();
-      p.log.step('Installing find-skills skill...');
-
-      try {
-        // Call runAdd directly instead of spawning subprocess
-        await runAdd(['vercel-labs/skills'], {
-          skill: ['find-skills'],
-          global: true,
-          yes: true,
-          all: true,
-        });
-      } catch {
-        p.log.warn('Failed to install find-skills. You can try again with:');
-        p.log.message(pc.dim('  npx skills add vercel-labs/skills@find-skills -g -y --all'));
-      }
-    } else {
-      // User declined - dismiss the prompt
-      await dismissPrompt('findSkillsPrompt');
-      p.log.message(
-        pc.dim('You can install it later with: npx skills add vercel-labs/skills@find-skills')
-      );
-    }
-  } catch {
-    // Don't fail the main installation if prompt fails
   }
 }
 

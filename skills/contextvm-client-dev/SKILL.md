@@ -173,6 +173,7 @@ Use this when:
 
 ## Reference Materials
 
+- [`references/nostr-way-without-sdks.md`](references/nostr-way-without-sdks.md) - The Nostr primitives behind CVM (raw events, JSON-RPC, manual implementation)
 - [`references/discovery.md`](references/discovery.md) - Server discovery patterns
 - [`references/proxy-pattern.md`](references/proxy-pattern.md) - Using NostrMCPProxy
 - [`references/stateless-mode.md`](references/stateless-mode.md) - Stateless connection details
