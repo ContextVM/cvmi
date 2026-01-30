@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents working on the `cvmi` CLI codeba
 
 ## Project Overview
 
-`cvmi` is the CLI for the ContextVM skills ecosystem.
+`cvmi` is the CLI for the ContextVM ecosystem.
 
 ## Commands
 

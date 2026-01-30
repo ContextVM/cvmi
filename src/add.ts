@@ -5,11 +5,12 @@ import { homedir } from 'os';
 import {
   parseSource,
   getOwnerRepo,
+  parseOwnerRepo,
+  isRepoPrivate,
   CVMI_CANONICAL_REPO,
   EMBEDDED_SKILLS_SUBPATH,
 } from './source-parser.ts';
 import { sep } from 'path';
-import { parseSource, getOwnerRepo, parseOwnerRepo, isRepoPrivate } from './source-parser.ts';
 
 /**
  * Check if a source identifier (owner/repo format) represents a private GitHub repo.
@@ -1478,8 +1479,7 @@ export async function runAdd(
       useEmbeddedSkillsSubpath && !parsed.subpath ? EMBEDDED_SKILLS_SUBPATH : parsed.subpath;
 
     spinner.start('Discovering skills...');
-    const skills = await discoverSkills(skillsDir, effectiveSubpath, { includeInternal });
-    const skills = await discoverSkills(skillsDir, parsed.subpath, {
+    const skills = await discoverSkills(skillsDir, effectiveSubpath, {
       includeInternal,
       fullDepth: options.fullDepth,
     });

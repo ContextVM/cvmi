@@ -65,7 +65,7 @@ function showLogo(): void {
 function showBanner(): void {
   showLogo();
   console.log();
-  console.log(`${DIM}cvmi - The ContextVM skills ecosystem${RESET}`);
+  console.log(`${DIM}CVMI - A cli for the cvm ecosystem${RESET}`);
   console.log();
   console.log(
     `  ${DIM}$${RESET} ${TEXT}npx cvmi add ${DIM}[options]${RESET}       ${DIM}Install ContextVM skills${RESET}`
@@ -93,6 +93,8 @@ ${BOLD}Commands:${RESET}
                      (no args: installs embedded ContextVM skills)
                      e.g. contextvm/cvmi
                           https://github.com/contextvm/cvmi
+  remove, rm, r     Remove installed skills
+  list, ls          List installed skills
   check             Check for available skill updates
   update            Update all skills to latest versions
 
@@ -125,9 +127,31 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi add --skill overview ${DIM}# install specific skill${RESET}
   ${DIM}$${RESET} cvmi add contextvm/cvmi -g        ${DIM}# install from repo, global${RESET}
   ${DIM}$${RESET} cvmi add contextvm/cvmi --skill troubleshooting ${DIM}# specific skill from repo${RESET}
+  ${DIM}$${RESET} cvmi list
+  ${DIM}$${RESET} cvmi list -g
   ${DIM}$${RESET} cvmi check
   ${DIM}$${RESET} cvmi update
-  ${DIM}$${RESET} cvmi generate-lock --dry-run
+  `);
+}
+
+function showRemoveHelp(): void {
+  console.log(`
+${BOLD}Usage:${RESET} cvmi remove <skill> [options]
+
+${BOLD}Remove Options:${RESET}
+  -g, --global           Remove from global scope (default: project)
+  -a, --agent <agents>   Remove from specific agents (use '*' for all agents)
+  -y, --yes              Skip confirmation prompts
+  --all                  Remove all skills
+
+${BOLD}Examples:${RESET}
+  ${DIM}$${RESET} cvmi remove skill-name            ${DIM}# remove a specific skill${RESET}
+  ${DIM}$${RESET} cvmi remove skill-one skill-two  ${DIM}# remove multiple skills${RESET}
+  ${DIM}$${RESET} cvmi remove --all -y              ${DIM}# remove all skills without prompt${RESET}
+  ${DIM}$${RESET} cvmi remove --global skill-name   ${DIM}# remove from global scope${RESET}
+  ${DIM}$${RESET} cvmi rm -g skill-name             ${DIM}# using alias, remove globally${RESET}
+
+${BOLD}Aliases:${RESET} rm, r
   `);
 }
 
