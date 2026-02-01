@@ -1,5 +1,11 @@
 # cvmi
 
+## 0.1.2
+
+### Patch Changes
+
+- feat(cli): add serve and use commands with configuration system
+
 ## 0.1.1
 
 ### Patch Changes

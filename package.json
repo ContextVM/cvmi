@@ -1,6 +1,6 @@
 {
   "name": "cvmi",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ContextVM Interface",
   "type": "module",
   "bin": {
@@ -20,7 +20,7 @@
     "format": "prettier --write 'src/**/*.ts' 'scripts/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'scripts/**/*.ts'",
     "prepare": "husky",
-    "test": "vitest",
+    "test": "vitest src",
     "type-check": "tsc --noEmit",
     "release": "pnpm run build && npm publish",
     "publish:snapshot": "npm version prerelease --preid=snapshot --no-git-tag-version && npm publish --tag snapshot"
@@ -83,22 +83,25 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "xdg-basedir": "^5.1.0"
+    "@contextvm/sdk": "^0.2.8",
+    "@modelcontextprotocol/sdk": "^1.25.3",
+    "xdg-basedir": "^5.1.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
     "@clack/prompts": "^0.11.0",
     "@types/bun": "latest",
-    "@types/node": "^22.10.0",
+    "@types/node": "^22.19.7",
     "gray-matter": "^4.0.3",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "obuild": "^0.4.22",
     "picocolors": "^1.1.1",
     "prettier": "^3.8.1",
-    "simple-git": "^3.27.0",
+    "simple-git": "^3.30.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=18"

@@ -11,6 +11,10 @@ import { runFind } from './find.ts';
 import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { track } from './telemetry.ts';
+import { serve } from './serve.ts';
+import { use } from './use.ts';
+import { parseEncryptionMode } from './config/loader.ts';
+import type { EncryptionMode } from '@contextvm/sdk';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -74,6 +78,12 @@ function showBanner(): void {
     `  ${DIM}$${RESET} ${TEXT}npx cvmi add ${DIM}<source>${RESET}       ${DIM}Install skills from a repository${RESET}`
   );
   console.log(
+    `  ${DIM}$${RESET} ${TEXT}npx cvmi serve${RESET}              ${DIM}Expose MCP server over Nostr${RESET}`
+  );
+  console.log(
+    `  ${DIM}$${RESET} ${TEXT}npx cvmi use ${DIM}<pubkey>${RESET}        ${DIM}Connect to Nostr MCP server${RESET}`
+  );
+  console.log(
     `  ${DIM}$${RESET} ${TEXT}npx cvmi check${RESET}            ${DIM}Check for updates${RESET}`
   );
   console.log(
@@ -90,11 +100,13 @@ ${BOLD}Usage:${RESET} cvmi <command> [options]
 
 ${BOLD}Commands:${RESET}
   add [package]     Add a skill package
-                     (no args: installs embedded ContextVM skills)
-                     e.g. contextvm/cvmi
-                          https://github.com/contextvm/cvmi
+                      (no args: installs embedded ContextVM skills)
+                      e.g. contextvm/cvmi
+                           https://github.com/contextvm/cvmi
   remove, rm, r     Remove installed skills
   list, ls          List installed skills
+  serve             Expose an MCP server over Nostr
+  use               Connect to a remote Nostr MCP server
   check             Check for available skill updates
   update            Update all skills to latest versions
 
@@ -113,10 +125,31 @@ ${BOLD}Remove Options:${RESET}
   -s, --skill <skills>   Specify skills to remove (use '*' for all skills)
   -y, --yes              Skip confirmation prompts
   --all                  Shorthand for --skill '*' --agent '*' -y
-  
+   
 ${BOLD}List Options:${RESET}
   -g, --global           List global skills (default: project)
   -a, --agent <agents>   Filter by specific agents
+
+${BOLD}Serve Usage:${RESET}
+  cvmi serve <mcp-server-command>
+
+${BOLD}Serve Options:${RESET}
+  --config <path>        Path to custom config JSON file (overrides global config)
+  --private-key <key>    Nostr private key (hex format, auto-generated if not provided)
+  --relays <urls>        Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
+  --public               Make server publicly accessible
+  --encryption-mode      Encryption mode: optional, required, disabled
+  --verbose              Enable verbose logging
+
+${BOLD}Use Usage:${RESET}
+  cvmi use <server-pubkey>
+
+${BOLD}Use Options:${RESET}
+  --config <path>        Path to custom config JSON file (overrides global config)
+  --private-key <key>    Nostr private key (hex format, auto-generated if not provided)
+  --relays <urls>        Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
+  --encryption-mode      Encryption mode: optional, required, disabled
+  --verbose              Enable verbose logging
 
 ${BOLD}Options:${RESET}
   --help, -h        Show this help message
@@ -126,7 +159,8 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi add                          ${DIM}# install embedded ContextVM skills${RESET}
   ${DIM}$${RESET} cvmi add --skill overview ${DIM}# install specific skill${RESET}
   ${DIM}$${RESET} cvmi add contextvm/cvmi -g        ${DIM}# install from repo, global${RESET}
-  ${DIM}$${RESET} cvmi add contextvm/cvmi --skill troubleshooting ${DIM}# specific skill from repo${RESET}
+  ${DIM}$${RESET} cvmi serve "npx -y @modelcontextprotocol/server-filesystem /tmp" ${DIM}# start gateway${RESET}
+  ${DIM}$${RESET} cvmi use <server-pubkey>          ${DIM}# connect to remote MCP server${RESET}
   ${DIM}$${RESET} cvmi list
   ${DIM}$${RESET} cvmi list -g
   ${DIM}$${RESET} cvmi check
@@ -446,6 +480,112 @@ async function runUpdate(): Promise<void> {
 }
 
 // ============================================
+// CLI Parsers for serve/use
+// ============================================
+
+interface ServeParseResult {
+  serverCommand: string | undefined;
+  verbose: boolean;
+  privateKey: string | undefined;
+  relays: string[] | undefined;
+  public: boolean;
+  encryption: EncryptionMode | undefined;
+  config: string | undefined;
+}
+
+interface UseParseResult {
+  serverPubkey: string | undefined;
+  verbose: boolean;
+  privateKey: string | undefined;
+  relays: string[] | undefined;
+  encryption: EncryptionMode | undefined;
+  config: string | undefined;
+}
+
+/**
+ * Parse CLI arguments for the serve command.
+ * Handles flags in any order and identifies the positional server command.
+ */
+function parseServeArgs(args: string[]): ServeParseResult {
+  const result: ServeParseResult = {
+    serverCommand: undefined,
+    verbose: false,
+    privateKey: undefined,
+    relays: undefined,
+    public: false,
+    encryption: undefined,
+    config: undefined,
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? '';
+
+    if (arg === '--verbose') {
+      result.verbose = true;
+    } else if (arg === '--public') {
+      result.public = true;
+    } else if (arg === '--private-key') {
+      result.privateKey = args[++i];
+    } else if (arg === '--relays') {
+      const value = args[++i];
+      result.relays = value ? value.split(',').map((r) => r.trim()) : undefined;
+    } else if (arg === '--encryption-mode') {
+      result.encryption = parseEncryptionMode(args[++i]);
+    } else if (arg === '--config') {
+      result.config = args[++i];
+    } else if (!arg.startsWith('-')) {
+      // First non-flag argument is the server command
+      result.serverCommand = arg;
+    } else {
+      // Skip unknown flags (could also throw error if strict)
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Parse CLI arguments for the use command.
+ * Handles flags in any order and identifies the positional server pubkey.
+ */
+function parseUseArgs(args: string[]): UseParseResult {
+  const result: UseParseResult = {
+    serverPubkey: undefined,
+    verbose: false,
+    privateKey: undefined,
+    relays: undefined,
+    encryption: undefined,
+    config: undefined,
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? '';
+
+    if (arg === '--verbose') {
+      result.verbose = true;
+    } else if (arg === '--private-key') {
+      result.privateKey = args[++i];
+    } else if (arg === '--relays') {
+      const value = args[++i];
+      result.relays = value ? value.split(',').map((r) => r.trim()) : undefined;
+    } else if (arg === '--encryption-mode') {
+      result.encryption = parseEncryptionMode(args[++i]);
+    } else if (arg === '--server-pubkey') {
+      result.serverPubkey = args[++i];
+    } else if (arg === '--config') {
+      result.config = args[++i];
+    } else if (!arg.startsWith('-')) {
+      // First non-flag argument is the server pubkey (if not already set via --server-pubkey)
+      result.serverPubkey = result.serverPubkey ?? arg;
+    } else {
+      // Skip unknown flags (could also throw error if strict)
+    }
+  }
+
+  return result;
+}
+
+// ============================================
 // Main
 // ============================================
 
@@ -497,6 +637,29 @@ async function main(): Promise<void> {
     case 'upgrade':
       runUpdate();
       break;
+    case 'serve': {
+      const parsed = parseServeArgs(restArgs);
+      await serve(parsed.serverCommand, {
+        verbose: parsed.verbose,
+        privateKey: parsed.privateKey,
+        relays: parsed.relays,
+        public: parsed.public,
+        encryption: parsed.encryption,
+        config: parsed.config,
+      });
+      break;
+    }
+    case 'use': {
+      const parsed = parseUseArgs(restArgs);
+      await use(parsed.serverPubkey, {
+        verbose: parsed.verbose,
+        privateKey: parsed.privateKey,
+        relays: parsed.relays,
+        encryption: parsed.encryption,
+        config: parsed.config,
+      });
+      break;
+    }
     case '--help':
     case '-h':
       showHelp();
