@@ -1,5 +1,11 @@
 # cvmi
 
+## 0.1.4
+
+### Patch Changes
+
+- 4169148: fix: exit cleanly
+
 ## 0.1.3
 
 ### Patch Changes
