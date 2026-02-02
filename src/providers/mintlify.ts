@@ -89,7 +89,7 @@ export class MintlifyProvider implements HostProvider {
     return url;
   }
 
-  getSourceIdentifier(url: string): string {
+  getSourceIdentifier(): string {
     // For Mintlify, we use "mintlify/com" as the identifier
     // This groups all Mintlify skills together under a single "repo"
     // The individual skill name (mintlify-proj) serves as the skill identifier

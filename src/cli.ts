@@ -1,26 +1,24 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync } from 'child_process';
-import { writeFileSync, readFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
-import { basename, join, dirname } from 'path';
+import { spawnSync } from 'child_process';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
 import { homedir } from 'os';
-import { createHash } from 'crypto';
 import { fileURLToPath } from 'url';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
-import { runFind } from './find.ts';
 import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { track } from './telemetry.ts';
-import { serve } from './serve.ts';
-import { use } from './use.ts';
+import { serve, showServeHelp } from './serve.ts';
+import { showUseHelp, use } from './use.ts';
 import { parseEncryptionMode } from './config/loader.ts';
 import type { EncryptionMode } from '@contextvm/sdk';
+import { BOLD, DIM, GRAYS, LOGO_LINES, RESET, TEXT } from './constants/ui.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // CVMI canonical remote for embedded skills
 const CVMI_CANONICAL_REPO = 'contextvm/cvmi';
-const EMBEDDED_SKILLS_SUBPATH = 'skills';
 
 function getVersion(): string {
   try {
@@ -35,30 +33,6 @@ function getVersion(): string {
 const VERSION = getVersion();
 initTelemetry(VERSION);
 
-const RESET = '\x1b[0m';
-const BOLD = '\x1b[1m';
-// 256-color grays - visible on both light and dark backgrounds
-const DIM = '\x1b[38;5;102m'; // darker gray for secondary text
-const TEXT = '\x1b[38;5;145m'; // lighter gray for primary text
-
-const LOGO_LINES = [
-  ' ▄▄·  ▌ ▐·• ▌ ▄ ·. ▪  ',
-  '▐█ ▌▪▪█·█▌·██ ▐███▪██ ',
-  '██ ▄▄▐█▐█•▐█ ▌▐▌▐█·▐█·',
-  '▐███▌ ███ ██ ██▌▐█▌▐█▌',
-  '·▀▀▀ . ▀  ▀▀  █▪▀▀▀▀▀▀',
-];
-
-// 256-color middle grays - visible on both light and dark backgrounds
-const GRAYS = [
-  '\x1b[38;5;250m', // lighter gray
-  '\x1b[38;5;248m',
-  '\x1b[38;5;245m', // mid gray
-  '\x1b[38;5;243m',
-  '\x1b[38;5;240m',
-  '\x1b[38;5;238m', // darker gray
-];
-
 function showLogo(): void {
   console.log();
   LOGO_LINES.forEach((line, i) => {
@@ -71,24 +45,19 @@ function showBanner(): void {
   console.log();
   console.log(`${DIM}CVMI - A cli for the cvm ecosystem${RESET}`);
   console.log();
-  console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx cvmi add ${DIM}[options]${RESET}       ${DIM}Install ContextVM skills${RESET}`
-  );
-  console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx cvmi add ${DIM}<source>${RESET}       ${DIM}Install skills from a repository${RESET}`
-  );
-  console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx cvmi serve${RESET}              ${DIM}Expose MCP server over Nostr${RESET}`
-  );
-  console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx cvmi use ${DIM}<pubkey>${RESET}        ${DIM}Connect to Nostr MCP server${RESET}`
-  );
-  console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx cvmi check${RESET}            ${DIM}Check for updates${RESET}`
-  );
-  console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx cvmi update${RESET}           ${DIM}Update all skills${RESET}`
-  );
+  const entries: [string, string][] = [
+    ['npx cvmi add [options]', 'Install ContextVM skills'],
+    ['npx cvmi serve [options] -- <cmd>', 'Expose MCP server over Nostr'],
+    ['npx cvmi use <pubkey>', 'Connect to Nostr MCP server'],
+    ['npx cvmi check', 'Check for updates'],
+    ['npx cvmi update', 'Update all skills'],
+  ];
+  const maxCmdLen = Math.max(...entries.map(([cmd]) => cmd.length));
+  for (const [cmd, desc] of entries) {
+    console.log(
+      `  ${DIM}$${RESET} ${TEXT}${cmd}${RESET}${' '.repeat(maxCmdLen - cmd.length + 3)}${DIM}${desc}${RESET}`
+    );
+  }
   console.log();
   console.log(`${DIM}try:${RESET} npx cvmi add`);
   console.log();
@@ -131,7 +100,8 @@ ${BOLD}List Options:${RESET}
   -a, --agent <agents>   Filter by specific agents
 
 ${BOLD}Serve Usage:${RESET}
-  cvmi serve <mcp-server-command>
+  cvmi serve [options] -- <mcp-server-command> [args...]
+  cvmi serve <mcp-server-command> [args...] [options]
 
 ${BOLD}Serve Options:${RESET}
   --config <path>        Path to custom config JSON file (overrides global config)
@@ -140,6 +110,9 @@ ${BOLD}Serve Options:${RESET}
   --public               Make server publicly accessible
   --encryption-mode      Encryption mode: optional, required, disabled
   --verbose              Enable verbose logging
+
+  ${BOLD}Tip:${RESET} Use ${BOLD}--${RESET} to separate cvmi flags from the server command.
+       Example: cvmi serve --verbose -- npx -y server --help
 
 ${BOLD}Use Usage:${RESET}
   cvmi use <server-pubkey>
@@ -159,7 +132,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi add                          ${DIM}# install embedded ContextVM skills${RESET}
   ${DIM}$${RESET} cvmi add --skill overview ${DIM}# install specific skill${RESET}
   ${DIM}$${RESET} cvmi add contextvm/cvmi -g        ${DIM}# install from repo, global${RESET}
-  ${DIM}$${RESET} cvmi serve "npx -y @modelcontextprotocol/server-filesystem /tmp" ${DIM}# start gateway${RESET}
+  ${DIM}$${RESET} cvmi serve -- npx -y @modelcontextprotocol/server-filesystem /tmp ${DIM}# start gateway${RESET}
   ${DIM}$${RESET} cvmi use <server-pubkey>          ${DIM}# connect to remote MCP server${RESET}
   ${DIM}$${RESET} cvmi list
   ${DIM}$${RESET} cvmi list -g
@@ -260,16 +233,7 @@ function readSkillLock(): SkillLockFile {
   }
 }
 
-function writeSkillLock(lock: SkillLockFile): void {
-  const lockPath = getSkillLockPath();
-  const dir = join(homedir(), AGENTS_DIR);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-  writeFileSync(lockPath, JSON.stringify(lock, null, 2), 'utf-8');
-}
-
-async function runCheck(args: string[] = []): Promise<void> {
+async function runCheck(): Promise<void> {
   console.log(`${TEXT}Checking for skill updates...${RESET}`);
   console.log();
 
@@ -484,13 +448,14 @@ async function runUpdate(): Promise<void> {
 // ============================================
 
 interface ServeParseResult {
-  serverCommand: string | undefined;
+  serverArgs: string[];
   verbose: boolean;
   privateKey: string | undefined;
   relays: string[] | undefined;
   public: boolean;
   encryption: EncryptionMode | undefined;
   config: string | undefined;
+  unknownFlags: string[];
 }
 
 interface UseParseResult {
@@ -500,44 +465,89 @@ interface UseParseResult {
   relays: string[] | undefined;
   encryption: EncryptionMode | undefined;
   config: string | undefined;
+  unknownFlags: string[];
 }
 
 /**
  * Parse CLI arguments for the serve command.
- * Handles flags in any order and identifies the positional server command.
+ *
+ * Conventions:
+ * - Prefer using `--` to separate cvmi flags from server command+args.
+ *   Example: cvmi serve --verbose -- npx -y server --help
+ * - Before `--`, only recognized cvmi flags are allowed (unknown flags become errors).
+ * - After `--`, everything is treated as server command+args.
+ *
+ * Back-compat:
+ * - If `--` is not present, recognized cvmi flags are parsed anywhere.
+ * - Unknown double-dash flags are collected as unknownFlags for errors.
+ * - Single-dash tokens (like -y) and non-flag tokens are treated as server args.
  */
 function parseServeArgs(args: string[]): ServeParseResult {
   const result: ServeParseResult = {
-    serverCommand: undefined,
+    serverArgs: [],
     verbose: false,
     privateKey: undefined,
     relays: undefined,
     public: false,
     encryption: undefined,
     config: undefined,
+    unknownFlags: [],
   };
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i] ?? '';
+  const separatorIndex = args.indexOf('--');
+  const beforeSeparator = separatorIndex === -1 ? args : args.slice(0, separatorIndex);
+  const afterSeparator = separatorIndex === -1 ? [] : args.slice(separatorIndex + 1);
 
+  // If the user uses `--`, treat everything after as server args.
+  if (afterSeparator.length > 0) {
+    result.serverArgs.push(...afterSeparator);
+  }
+
+  for (let i = 0; i < beforeSeparator.length; i++) {
+    const arg = beforeSeparator[i] ?? '';
+
+    // Helper to consume next value with validation
+    const consumeValue = (flagName: string): string | undefined => {
+      const nextIndex = ++i;
+      const value = beforeSeparator[nextIndex];
+      if (value === undefined || value.startsWith('--')) {
+        result.unknownFlags.push(`${flagName} (missing value)`);
+        // Roll back index if we hit another flag
+        if (value?.startsWith('--')) i--;
+        return undefined;
+      }
+      return value;
+    };
+
+    // Recognized cvmi flags - consume them regardless of position
     if (arg === '--verbose') {
       result.verbose = true;
     } else if (arg === '--public') {
       result.public = true;
     } else if (arg === '--private-key') {
-      result.privateKey = args[++i];
+      result.privateKey = consumeValue('--private-key');
     } else if (arg === '--relays') {
-      const value = args[++i];
+      const value = consumeValue('--relays');
       result.relays = value ? value.split(',').map((r) => r.trim()) : undefined;
     } else if (arg === '--encryption-mode') {
-      result.encryption = parseEncryptionMode(args[++i]);
+      const value = consumeValue('--encryption-mode');
+      result.encryption = parseEncryptionMode(value, 'CLI flag --encryption-mode');
     } else if (arg === '--config') {
-      result.config = args[++i];
-    } else if (!arg.startsWith('-')) {
-      // First non-flag argument is the server command
-      result.serverCommand = arg;
+      result.config = consumeValue('--config');
+    } else if (arg === '--help' || arg === '-h') {
+      // Handled at call site
+    } else if (arg.startsWith('--')) {
+      // Unknown double-dash flag - collect for error reporting
+      result.unknownFlags.push(arg);
     } else {
-      // Skip unknown flags (could also throw error if strict)
+      // If `--` was used, any non-flag args before separator are suspicious.
+      // Keep behavior strict to avoid surprising splits.
+      if (separatorIndex !== -1) {
+        result.unknownFlags.push(arg);
+      } else {
+        // Back-compat: Single-dash tokens (like -y) and non-flag arguments are server args
+        result.serverArgs.push(arg);
+      }
     }
   }
 
@@ -547,6 +557,7 @@ function parseServeArgs(args: string[]): ServeParseResult {
 /**
  * Parse CLI arguments for the use command.
  * Handles flags in any order and identifies the positional server pubkey.
+ * Reports unknown flags for strict validation.
  */
 function parseUseArgs(args: string[]): UseParseResult {
   const result: UseParseResult = {
@@ -556,34 +567,58 @@ function parseUseArgs(args: string[]): UseParseResult {
     relays: undefined,
     encryption: undefined,
     config: undefined,
+    unknownFlags: [],
   };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? '';
 
+    // Helper to consume next value with validation
+    const consumeValue = (flagName: string): string | undefined => {
+      const nextIndex = ++i;
+      const value = args[nextIndex];
+      if (value === undefined || value.startsWith('--')) {
+        result.unknownFlags.push(`${flagName} (missing value)`);
+        // Roll back index if we hit another flag
+        if (value?.startsWith('--')) i--;
+        return undefined;
+      }
+      return value;
+    };
+
     if (arg === '--verbose') {
       result.verbose = true;
     } else if (arg === '--private-key') {
-      result.privateKey = args[++i];
+      result.privateKey = consumeValue('--private-key');
     } else if (arg === '--relays') {
-      const value = args[++i];
+      const value = consumeValue('--relays');
       result.relays = value ? value.split(',').map((r) => r.trim()) : undefined;
     } else if (arg === '--encryption-mode') {
-      result.encryption = parseEncryptionMode(args[++i]);
+      const value = consumeValue('--encryption-mode');
+      result.encryption = parseEncryptionMode(value, 'CLI flag --encryption-mode');
     } else if (arg === '--server-pubkey') {
-      result.serverPubkey = args[++i];
+      result.serverPubkey = consumeValue('--server-pubkey');
     } else if (arg === '--config') {
-      result.config = args[++i];
-    } else if (!arg.startsWith('-')) {
+      result.config = consumeValue('--config');
+    } else if (arg === '--help' || arg === '-h') {
+      // Handled at call site
+    } else if (arg.startsWith('-')) {
+      // Unknown flag - collect for error reporting
+      result.unknownFlags.push(arg);
+    } else {
       // First non-flag argument is the server pubkey (if not already set via --server-pubkey)
       result.serverPubkey = result.serverPubkey ?? arg;
-    } else {
-      // Skip unknown flags (could also throw error if strict)
     }
   }
 
   return result;
 }
+
+// Exported for tests only (keeps parsing logic single-sourced).
+export const __test__ = {
+  parseServeArgs,
+  parseUseArgs,
+};
 
 // ============================================
 // Main
@@ -631,15 +666,31 @@ async function main(): Promise<void> {
       await runList(restArgs);
       break;
     case 'check':
-      runCheck(restArgs);
+      runCheck();
       break;
     case 'update':
     case 'upgrade':
       runUpdate();
       break;
     case 'serve': {
+      // Check for --help or -h flag (only before `--` separator)
+      const serveSeparatorIndex = restArgs.indexOf('--');
+      const serveArgsBeforeSeparator =
+        serveSeparatorIndex === -1 ? restArgs : restArgs.slice(0, serveSeparatorIndex);
+      if (serveArgsBeforeSeparator.includes('--help') || serveArgsBeforeSeparator.includes('-h')) {
+        showServeHelp();
+        break;
+      }
       const parsed = parseServeArgs(restArgs);
-      await serve(parsed.serverCommand, {
+
+      // Handle unknown flags
+      if (parsed.unknownFlags.length > 0) {
+        console.error(`Unknown flag(s): ${parsed.unknownFlags.join(', ')}`);
+        console.error(`Run 'cvmi serve --help' for usage.`);
+        process.exit(1);
+      }
+
+      await serve(parsed.serverArgs, {
         verbose: parsed.verbose,
         privateKey: parsed.privateKey,
         relays: parsed.relays,
@@ -650,7 +701,20 @@ async function main(): Promise<void> {
       break;
     }
     case 'use': {
+      // Check for --help or -h flag
+      if (restArgs.includes('--help') || restArgs.includes('-h')) {
+        showUseHelp();
+        break;
+      }
       const parsed = parseUseArgs(restArgs);
+
+      // Handle unknown flags
+      if (parsed.unknownFlags.length > 0) {
+        console.error(`Unknown flag(s): ${parsed.unknownFlags.join(', ')}`);
+        console.error(`Run 'cvmi use --help' for usage.`);
+        process.exit(1);
+      }
+
       await use(parsed.serverPubkey, {
         verbose: parsed.verbose,
         privateKey: parsed.privateKey,
@@ -675,4 +739,9 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+main().catch((err) => {
+  // Ensure commands fail with a non-zero exit code (useful for scripting).
+  // Note: This does not change SIGINT/SIGTERM behavior for long-running commands.
+  console.error(err);
+  process.exit(1);
+});

@@ -2,13 +2,7 @@ import { homedir } from 'os';
 import type { AgentType } from './types.ts';
 import { agents } from './agents.ts';
 import { listInstalledSkills, type InstalledSkill } from './installer.ts';
-
-const RESET = '\x1b[0m';
-const BOLD = '\x1b[1m';
-const DIM = '\x1b[38;5;102m';
-const TEXT = '\x1b[38;5;145m';
-const CYAN = '\x1b[36m';
-const YELLOW = '\x1b[33m';
+import { BOLD, CYAN, DIM, RESET, YELLOW } from './constants/ui.ts';
 
 interface ListOptions {
   global?: boolean;

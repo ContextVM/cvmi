@@ -56,7 +56,7 @@ export interface CvmiConfig {
  * Configuration file paths.
  */
 export interface ConfigPaths {
-  /** Global config directory (~/.config/cvmi or equivalent) */
+  /** Global config directory (~/.cvmi) */
   globalDir: string;
   /** Global config file path */
   globalConfig: string;

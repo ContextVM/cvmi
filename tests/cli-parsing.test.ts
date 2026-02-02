@@ -1,215 +1,152 @@
 /**
  * Unit tests for CLI parsing of serve and use commands
+ *
+ * These tests import the real parsing logic from src/cli.ts via __test__ exports,
+ * to avoid drift between CLI behavior and tests.
  */
 
 import { describe, it, expect } from 'vitest';
+import { __test__ } from '../src/cli.ts';
 
-// Import the parsing functions from cli.ts
-// Since they're not exported, we'll test them by simulating the parsing logic
+// Minimal helper to mirror serve's help-gating behavior in src/cli.ts.
+function serveShouldShowHelp(restArgs: string[]): boolean {
+  const separatorIndex = restArgs.indexOf('--');
+  const beforeSeparator = separatorIndex === -1 ? restArgs : restArgs.slice(0, separatorIndex);
+  return beforeSeparator.includes('--help') || beforeSeparator.includes('-h');
+}
 
 describe('CLI Argument Parsing', () => {
   describe('parseServeArgs', () => {
-    function parseServeArgs(args: string[]) {
-      const result: {
-        serverCommand: string | undefined;
-        verbose: boolean;
-        privateKey: string | undefined;
-        relays: string[] | undefined;
-        public: boolean;
-        encryption: string | undefined;
-        config: string | undefined;
-      } = {
-        serverCommand: undefined,
-        verbose: false,
-        privateKey: undefined,
-        relays: undefined,
-        public: false,
-        encryption: undefined,
-        config: undefined,
-      };
-
-      for (let i = 0; i < args.length; i++) {
-        const arg = args[i] ?? '';
-
-        if (arg === '--verbose') {
-          result.verbose = true;
-        } else if (arg === '--public') {
-          result.public = true;
-        } else if (arg === '--private-key') {
-          result.privateKey = args[++i];
-        } else if (arg === '--relays') {
-          const value = args[++i];
-          result.relays = value ? value.split(',').map((r) => r.trim()) : undefined;
-        } else if (arg === '--encryption-mode') {
-          result.encryption = args[++i];
-        } else if (arg === '--config') {
-          result.config = args[++i];
-        } else if (!arg.startsWith('-')) {
-          result.serverCommand = arg;
-        }
-      }
-
-      return result;
-    }
-
-    it('parses server command as first positional', () => {
-      const result = parseServeArgs(['npx -y @modelcontextprotocol/server-filesystem /tmp']);
-      expect(result.serverCommand).toBe('npx -y @modelcontextprotocol/server-filesystem /tmp');
+    it('collects command+args tokens (no flags)', () => {
+      const result = __test__.parseServeArgs([
+        'npx',
+        '-y',
+        '@modelcontextprotocol/server-filesystem',
+        '/tmp',
+      ]);
+      expect(result.serverArgs).toEqual([
+        'npx',
+        '-y',
+        '@modelcontextprotocol/server-filesystem',
+        '/tmp',
+      ]);
       expect(result.verbose).toBe(false);
+      expect(result.unknownFlags).toEqual([]);
     });
 
-    it('parses flags before positional', () => {
-      const result = parseServeArgs([
+    it('supports flags before command tokens', () => {
+      const result = __test__.parseServeArgs([
         '--verbose',
         '--relays',
         'wss://relay1.com,wss://relay2.com',
-        'npx -y server',
+        'npx',
+        '-y',
+        'server',
       ]);
       expect(result.verbose).toBe(true);
       expect(result.relays).toEqual(['wss://relay1.com', 'wss://relay2.com']);
-      expect(result.serverCommand).toBe('npx -y server');
+      expect(result.serverArgs).toEqual(['npx', '-y', 'server']);
+      expect(result.unknownFlags).toEqual([]);
     });
 
-    it('parses flags after positional', () => {
-      const result = parseServeArgs(['npx -y server', '--verbose', '--relays', 'wss://relay1.com']);
-      expect(result.serverCommand).toBe('npx -y server');
-      expect(result.verbose).toBe(true);
-      expect(result.relays).toEqual(['wss://relay1.com']);
-    });
-
-    it('parses mixed flags and positional', () => {
-      const result = parseServeArgs([
-        '--private-key',
-        'abc123',
-        'npx -y server',
+    it('supports flags after command tokens', () => {
+      const result = __test__.parseServeArgs([
+        'python',
+        '/path/to/server.py',
+        '--verbose',
         '--public',
-        '--config',
-        '/path/to/config.json',
       ]);
-      expect(result.privateKey).toBe('abc123');
-      expect(result.serverCommand).toBe('npx -y server');
-      expect(result.public).toBe(true);
-      expect(result.config).toBe('/path/to/config.json');
-    });
-
-    it('parses --public flag', () => {
-      const result = parseServeArgs(['--public', 'command']);
-      expect(result.public).toBe(true);
-      expect(result.serverCommand).toBe('command');
-    });
-
-    it('parses --encryption-mode flag', () => {
-      const result = parseServeArgs(['--encryption-mode', 'required', 'command']);
-      expect(result.encryption).toBe('required');
-      expect(result.serverCommand).toBe('command');
-    });
-
-    it('handles no server command', () => {
-      const result = parseServeArgs(['--verbose', '--public']);
+      expect(result.serverArgs).toEqual(['python', '/path/to/server.py']);
       expect(result.verbose).toBe(true);
       expect(result.public).toBe(true);
-      expect(result.serverCommand).toBeUndefined();
+      expect(result.unknownFlags).toEqual([]);
+    });
+
+    it('collects unknown flags for strict handling', () => {
+      const result = __test__.parseServeArgs(['--encrpytion-mode', 'required', 'npx', 'server']);
+      expect(result.unknownFlags).toEqual(['--encrpytion-mode']);
+      // non-flag tokens are still collected
+      expect(result.serverArgs).toEqual(['required', 'npx', 'server']);
+    });
+
+    it('supports `--` to separate cvmi flags from server args', () => {
+      const result = __test__.parseServeArgs(['--verbose', '--', 'npx', '-y', 'server', '--help']);
+      expect(result.verbose).toBe(true);
+      expect(result.serverArgs).toEqual(['npx', '-y', 'server', '--help']);
+      expect(result.unknownFlags).toEqual([]);
+
+      // `--help` after separator should NOT trigger cvmi help
+      expect(serveShouldShowHelp(['--verbose', '--', 'npx', '--help'])).toBe(false);
+    });
+
+    it('errors if non-flag tokens appear before `--`', () => {
+      const result = __test__.parseServeArgs(['npx', '--', 'server']);
+      expect(result.unknownFlags).toEqual(['npx']);
+      expect(result.serverArgs).toEqual(['server']);
     });
   });
 
   describe('parseUseArgs', () => {
-    function parseUseArgs(args: string[]) {
-      const result: {
-        serverPubkey: string | undefined;
-        verbose: boolean;
-        privateKey: string | undefined;
-        relays: string[] | undefined;
-        encryption: string | undefined;
-        config: string | undefined;
-      } = {
-        serverPubkey: undefined,
-        verbose: false,
-        privateKey: undefined,
-        relays: undefined,
-        encryption: undefined,
-        config: undefined,
-      };
-
-      for (let i = 0; i < args.length; i++) {
-        const arg = args[i] ?? '';
-
-        if (arg === '--verbose') {
-          result.verbose = true;
-        } else if (arg === '--private-key') {
-          result.privateKey = args[++i];
-        } else if (arg === '--relays') {
-          const value = args[++i];
-          result.relays = value ? value.split(',').map((r) => r.trim()) : undefined;
-        } else if (arg === '--encryption-mode') {
-          result.encryption = args[++i];
-        } else if (arg === '--server-pubkey') {
-          result.serverPubkey = args[++i];
-        } else if (arg === '--config') {
-          result.config = args[++i];
-        } else if (!arg.startsWith('-')) {
-          result.serverPubkey = result.serverPubkey ?? arg;
-        }
-      }
-
-      return result;
-    }
-
-    it('parses server pubkey as first positional', () => {
-      const result = parseUseArgs(['npub1abcdef123456']);
+    it('parses server pubkey as positional', () => {
+      const result = __test__.parseUseArgs(['npub1abcdef123456']);
       expect(result.serverPubkey).toBe('npub1abcdef123456');
-    });
-
-    it('parses flags before positional', () => {
-      const result = parseUseArgs([
-        '--verbose',
-        '--relays',
-        'wss://relay1.com,wss://relay2.com',
-        'npub1abcdef',
-      ]);
-      expect(result.verbose).toBe(true);
-      expect(result.relays).toEqual(['wss://relay1.com', 'wss://relay2.com']);
-      expect(result.serverPubkey).toBe('npub1abcdef');
-    });
-
-    it('parses flags after positional', () => {
-      const result = parseUseArgs(['npub1abcdef', '--verbose', '--relays', 'wss://relay1.com']);
-      expect(result.serverPubkey).toBe('npub1abcdef');
-      expect(result.verbose).toBe(true);
-      expect(result.relays).toEqual(['wss://relay1.com']);
+      expect(result.unknownFlags).toEqual([]);
     });
 
     it('prefers --server-pubkey flag over positional', () => {
-      const result = parseUseArgs(['--server-pubkey', 'npub1fromflag', 'npub1frompositional']);
-      // Flag takes precedence
-      expect(result.serverPubkey).toBe('npub1fromflag');
-    });
-
-    it('uses positional when --server-pubkey not provided', () => {
-      const result = parseUseArgs(['npub1positional']);
-      expect(result.serverPubkey).toBe('npub1positional');
-    });
-
-    it('parses mixed flags and positional', () => {
-      const result = parseUseArgs([
-        '--private-key',
-        'abc123',
-        'npub1server',
-        '--encryption-mode',
-        'required',
-        '--config',
-        '/path/to/config.json',
+      const result = __test__.parseUseArgs([
+        '--server-pubkey',
+        'npub1fromflag',
+        'npub1frompositional',
       ]);
-      expect(result.privateKey).toBe('abc123');
-      expect(result.serverPubkey).toBe('npub1server');
-      expect(result.encryption).toBe('required');
-      expect(result.config).toBe('/path/to/config.json');
+      expect(result.serverPubkey).toBe('npub1fromflag');
+      expect(result.unknownFlags).toEqual([]);
     });
 
-    it('handles no server pubkey', () => {
-      const result = parseUseArgs(['--verbose', '--private-key', 'abc']);
+    it('collects unknown flags for strict handling', () => {
+      const result = __test__.parseUseArgs(['--server-pubkye', 'npub1oops']);
+      expect(result.unknownFlags).toEqual(['--server-pubkye']);
+    });
+
+    it('reports missing value for flags that require them', () => {
+      const result = __test__.parseUseArgs(['--private-key']);
+      expect(result.unknownFlags).toEqual(['--private-key (missing value)']);
+      expect(result.privateKey).toBeUndefined();
+    });
+
+    it('reports missing value when another flag follows', () => {
+      const result = __test__.parseUseArgs(['--private-key', '--verbose']);
+      expect(result.unknownFlags).toEqual(['--private-key (missing value)']);
+      // The --verbose should still be processed
       expect(result.verbose).toBe(true);
-      expect(result.privateKey).toBe('abc');
-      expect(result.serverPubkey).toBeUndefined();
+    });
+  });
+
+  describe('parseServeArgs missing value handling', () => {
+    it('reports missing value for --private-key', () => {
+      const result = __test__.parseServeArgs(['--private-key']);
+      expect(result.unknownFlags).toEqual(['--private-key (missing value)']);
+    });
+
+    it('reports missing value for --relays', () => {
+      const result = __test__.parseServeArgs(['--relays']);
+      expect(result.unknownFlags).toEqual(['--relays (missing value)']);
+    });
+
+    it('reports missing value for --encryption-mode', () => {
+      const result = __test__.parseServeArgs(['--encryption-mode']);
+      expect(result.unknownFlags).toEqual(['--encryption-mode (missing value)']);
+    });
+
+    it('reports missing value for --config', () => {
+      const result = __test__.parseServeArgs(['--config']);
+      expect(result.unknownFlags).toEqual(['--config (missing value)']);
+    });
+
+    it('reports missing value with -- separator', () => {
+      const result = __test__.parseServeArgs(['--private-key', '--', 'server']);
+      expect(result.unknownFlags).toEqual(['--private-key (missing value)']);
+      expect(result.serverArgs).toEqual(['server']);
     });
   });
 });

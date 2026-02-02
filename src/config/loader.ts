@@ -5,7 +5,6 @@
 import { readFile, access } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
-import { xdgConfig } from 'xdg-basedir';
 import { EncryptionMode } from '@contextvm/sdk';
 import type { CvmiConfig, ConfigPaths, ServeConfig, UseConfig } from './types.js';
 
@@ -20,14 +19,13 @@ export const DEFAULT_ENCRYPTION = EncryptionMode.OPTIONAL;
  */
 function getConfigHome(): string {
   const home = homedir();
-  // Use xdg-basedir (not env-paths) to match OpenCode/Amp/Goose behavior on all platforms.
-  const xdgConfigHome = xdgConfig ?? join(home, '.config');
 
   if (process.platform === 'win32') {
     return join(home, 'AppData', 'Roaming', 'cvmi');
   }
 
-  return join(xdgConfigHome, 'cvmi');
+  // For cvmi serve/use config, use a dotfolder (separate from XDG and from .agents/ skill installs).
+  return join(home, '.cvmi');
 }
 
 /**
@@ -72,7 +70,7 @@ export function loadConfigFromEnv(): Partial<CvmiConfig> {
   const serveEncryption = process.env.CVMI_GATEWAY_ENCRYPTION || process.env.CVMI_SERVE_ENCRYPTION;
   if (serveEncryption) {
     config.serve = config.serve || {};
-    config.serve.encryption = parseEncryptionMode(serveEncryption);
+    config.serve.encryption = parseEncryptionMode(serveEncryption, 'env var');
   }
 
   // Use/proxy environment variables
@@ -97,7 +95,7 @@ export function loadConfigFromEnv(): Partial<CvmiConfig> {
   const useEncryption = process.env.CVMI_PROXY_ENCRYPTION || process.env.CVMI_USE_ENCRYPTION;
   if (useEncryption) {
     config.use = config.use || {};
-    config.use.encryption = parseEncryptionMode(useEncryption);
+    config.use.encryption = parseEncryptionMode(useEncryption, 'env var');
   }
 
   return config;
@@ -135,8 +133,8 @@ function mergeConfigs<T>(...sources: (Partial<T> | undefined)[]): Partial<T> {
 }
 
 /**
- * Load full configuration with priority: CLI flags > Project config > Custom config > Global config > Environment.
- * If customConfigPath is provided, it's used instead of global config (and takes precedence over global but below project).
+ * Load full configuration with priority: CLI > Custom config > Project config > Global config > Environment.
+ * If customConfigPath is provided, it takes precedence over project and global configs (but CLI flags still win).
  */
 export async function loadConfig(
   cliFlags: Partial<CvmiConfig> = {},
@@ -147,23 +145,23 @@ export async function loadConfig(
   // Load from all sources (lowest to highest priority)
   const envConfig = loadConfigFromEnv();
   const globalConfig = await loadConfigFromFile(paths.globalConfig);
-  const customConfig = customConfigPath ? await loadConfigFromFile(customConfigPath) : {};
   const projectConfig = await loadConfigFromFile(paths.projectConfig);
+  const customConfig = customConfigPath ? await loadConfigFromFile(customConfigPath) : {};
 
-  // Merge with priority: CLI > Project > Custom > Global > Environment
+  // Merge with priority: CLI > Custom > Project > Global > Environment
   return {
     serve: mergeConfigs(
       envConfig.serve,
       globalConfig.serve,
-      customConfig.serve,
       projectConfig.serve,
+      customConfig.serve,
       cliFlags.serve
     ),
     use: mergeConfigs(
       envConfig.use,
       globalConfig.use,
-      customConfig.use,
       projectConfig.use,
+      customConfig.use,
       cliFlags.use
     ),
   };
@@ -205,11 +203,23 @@ export function getUseConfig(
 
 /**
  * Parse encryption mode from string value.
+ * Logs a warning for invalid values and falls back to OPTIONAL.
  */
-export function parseEncryptionMode(value: string | undefined): EncryptionMode | undefined {
+export function parseEncryptionMode(
+  value: string | undefined,
+  context?: string
+): EncryptionMode | undefined {
   if (!value) return undefined;
   const normalized = value.toLowerCase();
   if (normalized === 'required') return EncryptionMode.REQUIRED;
   if (normalized === 'disabled') return EncryptionMode.DISABLED;
+  if (normalized === 'optional') return EncryptionMode.OPTIONAL;
+
+  // Invalid value - warn and fall back to OPTIONAL
+  const warnContext = context ? ` (${context})` : '';
+  console.warn(
+    `Warning: Invalid encryption value "${value}"${warnContext}. ` +
+      `Must be one of: optional, required, disabled. Falling back to "optional".`
+  );
   return EncryptionMode.OPTIONAL;
 }

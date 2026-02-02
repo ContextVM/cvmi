@@ -22,8 +22,7 @@ describe('Config Paths', () => {
   describe('getConfigPaths', () => {
     it('returns correct global and project paths', () => {
       const paths = getConfigPaths();
-      expect(paths.globalDir).toContain('.config');
-      expect(paths.globalDir).toContain('cvmi');
+      expect(paths.globalDir).toContain('.cvmi');
       expect(paths.globalConfig).toContain('config.json');
       expect(paths.projectConfig).toContain('.cvmi.json');
     });
@@ -135,6 +134,32 @@ describe('getServeConfig with defaults', () => {
   it('uses default encryption mode', () => {
     const config = getServeConfig({ privateKey: 'key' });
     expect(config.encryption).toBe(DEFAULT_ENCRYPTION);
+  });
+
+  it('handles command and args from config file', () => {
+    const config = getServeConfig({
+      privateKey: 'key',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
+    });
+    expect(config.command).toBe('npx');
+    expect(config.args).toEqual(['-y', '@modelcontextprotocol/server-filesystem', '/tmp']);
+  });
+
+  it('cliFlags override config file command and args', () => {
+    const config = getServeConfig(
+      {
+        privateKey: 'key',
+        command: 'python',
+        args: ['server.py'],
+      },
+      {
+        command: 'node',
+        args: ['index.js'],
+      }
+    );
+    expect(config.command).toBe('node');
+    expect(config.args).toEqual(['index.js']);
   });
 });
 

@@ -29,7 +29,6 @@ import { discoverSkills, getSkillDisplayName, filterSkills } from './skills.ts';
 import {
   installSkillForAgent,
   isSkillInstalled,
-  getInstallPath,
   getCanonicalPath,
   installRemoteSkillForAgent,
   installWellKnownSkillForAgent,
@@ -42,8 +41,6 @@ import { fetchMintlifySkill } from './mintlify.ts';
 import {
   addSkillToLock,
   fetchSkillFolderHash,
-  isPromptDismissed,
-  dismissPrompt,
   getLastSelectedAgents,
   saveSelectedAgents,
 } from './skill-lock.ts';
@@ -246,7 +243,6 @@ export interface AddOptions {
  * This is the generic handler for direct URL skills (Mintlify, HuggingFace, etc.)
  */
 async function handleRemoteSkill(
-  source: string,
   url: string,
   options: AddOptions,
   spinner: ReturnType<typeof p.spinner>
@@ -256,7 +252,7 @@ async function handleRemoteSkill(
 
   if (!provider) {
     // Fall back to legacy Mintlify handling for backwards compatibility
-    await handleDirectUrlSkillLegacy(source, url, options, spinner);
+    await handleDirectUrlSkillLegacy(url, options, spinner);
     return;
   }
 
@@ -611,7 +607,6 @@ async function handleRemoteSkill(
  * Discovers skills from /.well-known/skills/index.json
  */
 async function handleWellKnownSkills(
-  source: string,
   url: string,
   options: AddOptions,
   spinner: ReturnType<typeof p.spinner>
@@ -1056,7 +1051,6 @@ async function handleWellKnownSkills(
  * @deprecated Use handleRemoteSkill with provider system instead
  */
 async function handleDirectUrlSkillLegacy(
-  source: string,
   url: string,
   options: AddOptions,
   spinner: ReturnType<typeof p.spinner>
@@ -1429,13 +1423,13 @@ export async function runAdd(
 
     // Handle direct URL skills (Mintlify, HuggingFace, etc.) via provider system
     if (parsed.type === 'direct-url') {
-      await handleRemoteSkill(source, parsed.url, options, spinner);
+      await handleRemoteSkill(parsed.url, options, spinner);
       return;
     }
 
     // Handle well-known skills from arbitrary URLs
     if (parsed.type === 'well-known') {
-      await handleWellKnownSkills(source, parsed.url, options, spinner);
+      await handleWellKnownSkills(parsed.url, options, spinner);
       return;
     }
 

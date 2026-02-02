@@ -19,7 +19,6 @@ export {
 import { registerProvider } from './registry.ts';
 import { mintlifyProvider } from './mintlify.ts';
 import { huggingFaceProvider } from './huggingface.ts';
-import { wellKnownProvider } from './wellknown.ts';
 
 registerProvider(mintlifyProvider);
 registerProvider(huggingFaceProvider);
