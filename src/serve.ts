@@ -107,6 +107,8 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
   const signal = await waitForShutdownSignal();
   p.log.message(`\n${signal} received. Shutting down...`);
   await gateway.stop();
+
+  process.exit(0);
 }
 
 export function showServeHelp(): void {

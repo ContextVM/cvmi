@@ -1,0 +1,3 @@
+[submodule "ts-sdk"]
+	path = ts-sdk
+	url = git@github.com:ContextVM/ts-sdk.git

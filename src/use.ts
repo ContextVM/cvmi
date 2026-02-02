@@ -89,6 +89,8 @@ export async function use(serverPubkeyArg: string | undefined, options: UseOptio
   const signal = await waitForShutdownSignal();
   p.log.message(`\n${signal} received. Shutting down...`);
   await proxy.stop();
+
+  process.exit(0);
 }
 
 export function showUseHelp(): void {

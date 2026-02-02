@@ -83,7 +83,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@contextvm/sdk": "^0.2.8",
+    "@contextvm/sdk": "^0.2.10",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "xdg-basedir": "^5.1.0",
     "zod": "^4.3.6"
