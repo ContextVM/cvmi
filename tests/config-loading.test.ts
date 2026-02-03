@@ -13,6 +13,7 @@ import {
   getConfigPaths,
   getServeConfig,
   getUseConfig,
+  savePrivateKeyToEnv,
   DEFAULT_RELAYS,
   DEFAULT_ENCRYPTION,
 } from '../src/config/loader.ts';
@@ -205,5 +206,49 @@ describe('getConfigPaths with custom config', () => {
     expect(paths.globalDir).toContain('cvmi');
     expect(paths.globalConfig).toContain('config.json');
     expect(paths.customConfigPath).toBeUndefined();
+  });
+});
+
+describe('savePrivateKeyToEnv', () => {
+  const originalCwd = process.cwd();
+  const testDir = '/tmp/cvmi-test-env';
+
+  beforeEach(async () => {
+    // Create test directory
+    await import('fs/promises').then((fs) => fs.mkdir(testDir, { recursive: true }));
+    process.chdir(testDir);
+  });
+
+  afterEach(async () => {
+    // Clean up test directory
+    process.chdir(originalCwd);
+    await import('fs/promises').then((fs) => fs.rm(testDir, { recursive: true, force: true }));
+  });
+
+  it('saves serve private key to .env file', async () => {
+    await savePrivateKeyToEnv('serve', 'test-serve-key-123');
+
+    const fs = await import('fs/promises');
+    const envContent = await fs.readFile('.env', 'utf-8');
+    expect(envContent).toContain('CVMI_SERVE_PRIVATE_KEY=test-serve-key-123');
+  });
+
+  it('saves use private key to .env file', async () => {
+    await savePrivateKeyToEnv('use', 'test-use-key-456');
+
+    const fs = await import('fs/promises');
+    const envContent = await fs.readFile('.env', 'utf-8');
+    expect(envContent).toContain('CVMI_USE_PRIVATE_KEY=test-use-key-456');
+  });
+
+  it('appends to existing .env file without overwriting', async () => {
+    const fs = await import('fs/promises');
+    await fs.writeFile('.env', 'EXISTING_VAR=value\n', 'utf-8');
+
+    await savePrivateKeyToEnv('serve', 'new-key');
+
+    const envContent = await fs.readFile('.env', 'utf-8');
+    expect(envContent).toContain('EXISTING_VAR=value');
+    expect(envContent).toContain('CVMI_SERVE_PRIVATE_KEY=new-key');
   });
 });

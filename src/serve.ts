@@ -11,6 +11,7 @@ import { generatePrivateKey, normalizePrivateKey } from './utils/crypto.ts';
 import { waitForShutdownSignal } from './utils/process.ts';
 import { BOLD, DIM, RESET } from './constants/ui.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { savePrivateKeyToEnv } from './config/loader.ts';
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -74,6 +75,7 @@ export interface ServeOptions {
   public?: boolean;
   encryption?: EncryptionMode;
   verbose?: boolean;
+  persistPrivateKey?: boolean;
 }
 
 /**
@@ -86,6 +88,7 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
     relays: options.relays,
     public: options.public,
     encryption: options.encryption,
+    persistPrivateKey: options.persistPrivateKey,
   };
 
   // Load configuration from all sources (CLI flags have highest priority)
@@ -114,6 +117,18 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
 
   // Validate/normalize key (accepts hex, 0x-hex, or nsec...)
   privateKey = normalizePrivateKey(privateKey);
+
+  // Persist to .env file if flag is set
+  if (options.persistPrivateKey) {
+    try {
+      await savePrivateKeyToEnv('serve', privateKey);
+      p.log.info(`Private key persisted to .env file (CVMI_SERVE_PRIVATE_KEY)`);
+    } catch (error) {
+      p.log.warn(
+        `Failed to persist private key: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
 
   // Use default relays if none specified
   const relays = serveConfig.relays?.length ? serveConfig.relays : DEFAULT_RELAYS;
@@ -217,6 +232,7 @@ ${BOLD}Recommended parsing convention:${RESET}
 ${BOLD}Options:${RESET}
   --config <path>         Path to custom config JSON file
   --private-key <key>     Nostr private key (hex/nsec format, auto-generated if not provided)
+  --persist-private-key   Save private key to .env file for future use
   --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
   --public                Make server publicly accessible (default: private)
   --encryption-mode       Encryption mode: optional, required, disabled (default: optional)
@@ -238,16 +254,19 @@ ${BOLD}SDK Logging (set via environment, not config files):${RESET}
     LOG_ENABLED (true|false)
 
   Config file format (.cvmi.json or custom --config):
+  Note: Private keys are stored in .env file, not JSON config.
   {
     "serve": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-      "privateKey": "nsec1...",
       "relays": ["wss://relay.example.com"],
       "public": false,
       "encryption": "optional"
     }
   }
+
+  .env file format (for private keys):
+    CVMI_SERVE_PRIVATE_KEY=nsec1...
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi serve -- npx -y @modelcontextprotocol/server-filesystem /tmp ${DIM}# start gateway${RESET}

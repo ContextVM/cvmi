@@ -9,6 +9,7 @@ import { loadConfig, getUseConfig, DEFAULT_RELAYS } from './config/index.ts';
 import { generatePrivateKey, normalizePrivateKey } from './utils/crypto.ts';
 import { waitForShutdownSignal } from './utils/process.ts';
 import { BOLD, DIM, RESET } from './constants/ui.ts';
+import { savePrivateKeyToEnv } from './config/loader.ts';
 
 /** CLI options for the use command */
 export interface UseOptions {
@@ -17,6 +18,7 @@ export interface UseOptions {
   relays?: string[];
   encryption?: EncryptionMode;
   verbose?: boolean;
+  persistPrivateKey?: boolean;
 }
 
 /**
@@ -28,6 +30,7 @@ export async function use(serverPubkeyArg: string | undefined, options: UseOptio
     privateKey: options.privateKey,
     relays: options.relays,
     encryption: options.encryption,
+    persistPrivateKey: options.persistPrivateKey,
   };
 
   // Load configuration from all sources (CLI flags have highest priority)
@@ -51,6 +54,18 @@ export async function use(serverPubkeyArg: string | undefined, options: UseOptio
 
   // Validate/normalize key (accepts hex, 0x-hex, or nsec...)
   privateKey = normalizePrivateKey(privateKey);
+
+  // Persist to .env file if flag is set
+  if (options.persistPrivateKey) {
+    try {
+      await savePrivateKeyToEnv('use', privateKey);
+      p.log.info(`Private key persisted to .env file (CVMI_USE_PRIVATE_KEY)`);
+    } catch (error) {
+      p.log.warn(
+        `Failed to persist private key: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
 
   // Use default relays if none specified
   const relays = useConfig.relays?.length ? useConfig.relays : DEFAULT_RELAYS;
@@ -108,6 +123,7 @@ ${BOLD}Arguments:${RESET}
 ${BOLD}Options:${RESET}
   --config <path>         Path to custom config JSON file
   --private-key <key>     Your Nostr private key (hex/nsec format, auto-generated if not provided)
+  --persist-private-key   Save private key to .env file for future use
   --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
   --encryption-mode       Encryption mode: optional, required, disabled (default: optional)
   --verbose               Enable verbose logging
@@ -127,14 +143,17 @@ ${BOLD}SDK Logging (set via environment, not config files):${RESET}
     LOG_ENABLED (true|false)
 
   Config file format (.cvmi.json or custom --config):
+  Note: Private keys are stored in .env file, not JSON config.
   {
     "use": {
       "serverPubkey": "npub1...",
-      "privateKey": "nsec1...",
       "relays": ["wss://relay.example.com"],
       "encryption": "optional"
     }
   }
+
+  .env file format (for private keys):
+    CVMI_USE_PRIVATE_KEY=nsec1...
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi use npub1q... ${DIM}# connect to remote server by public key${RESET}

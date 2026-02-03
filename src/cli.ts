@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+// Load .env file early if present (Node 20.6+)
+if (process.loadEnvFile) {
+  try {
+    process.loadEnvFile();
+  } catch {
+    // .env file not found or not readable, continue without it
+  }
+}
+
 import { spawnSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -106,6 +115,7 @@ ${BOLD}Serve Usage:${RESET}
 ${BOLD}Serve Options:${RESET}
   --config <path>        Path to custom config JSON file (overrides global config)
   --private-key <key>    Nostr private key (hex format, auto-generated if not provided)
+  --persist-private-key  Save private key to .env file for reuse
   --relays <urls>        Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
   --public               Make server publicly accessible
   --encryption-mode      Encryption mode: optional, required, disabled
@@ -120,6 +130,7 @@ ${BOLD}Use Usage:${RESET}
 ${BOLD}Use Options:${RESET}
   --config <path>        Path to custom config JSON file (overrides global config)
   --private-key <key>    Nostr private key (hex format, auto-generated if not provided)
+  --persist-private-key  Save private key to .env file for reuse
   --relays <urls>        Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
   --encryption-mode      Encryption mode: optional, required, disabled
   --verbose              Enable verbose logging
@@ -455,6 +466,7 @@ interface ServeParseResult {
   public: boolean;
   encryption: EncryptionMode | undefined;
   config: string | undefined;
+  persistPrivateKey: boolean;
   unknownFlags: string[];
 }
 
@@ -465,6 +477,7 @@ interface UseParseResult {
   relays: string[] | undefined;
   encryption: EncryptionMode | undefined;
   config: string | undefined;
+  persistPrivateKey: boolean;
   unknownFlags: string[];
 }
 
@@ -491,6 +504,7 @@ function parseServeArgs(args: string[]): ServeParseResult {
     public: false,
     encryption: undefined,
     config: undefined,
+    persistPrivateKey: false,
     unknownFlags: [],
   };
 
@@ -526,6 +540,8 @@ function parseServeArgs(args: string[]): ServeParseResult {
       result.public = true;
     } else if (arg === '--private-key') {
       result.privateKey = consumeValue('--private-key');
+    } else if (arg === '--persist-private-key') {
+      result.persistPrivateKey = true;
     } else if (arg === '--relays') {
       const value = consumeValue('--relays');
       result.relays = value ? value.split(',').map((r) => r.trim()) : undefined;
@@ -567,6 +583,7 @@ function parseUseArgs(args: string[]): UseParseResult {
     relays: undefined,
     encryption: undefined,
     config: undefined,
+    persistPrivateKey: false,
     unknownFlags: [],
   };
 
@@ -590,6 +607,8 @@ function parseUseArgs(args: string[]): UseParseResult {
       result.verbose = true;
     } else if (arg === '--private-key') {
       result.privateKey = consumeValue('--private-key');
+    } else if (arg === '--persist-private-key') {
+      result.persistPrivateKey = true;
     } else if (arg === '--relays') {
       const value = consumeValue('--relays');
       result.relays = value ? value.split(',').map((r) => r.trim()) : undefined;
@@ -697,6 +716,7 @@ async function main(): Promise<void> {
         public: parsed.public,
         encryption: parsed.encryption,
         config: parsed.config,
+        persistPrivateKey: parsed.persistPrivateKey,
       });
       break;
     }
@@ -721,6 +741,7 @@ async function main(): Promise<void> {
         relays: parsed.relays,
         encryption: parsed.encryption,
         config: parsed.config,
+        persistPrivateKey: parsed.persistPrivateKey,
       });
       break;
     }

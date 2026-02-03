@@ -1,6 +1,6 @@
 {
   "name": "cvmi",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "ContextVM Interface",
   "type": "module",
   "bin": {
@@ -105,7 +105,7 @@
     "vitest": "^4.0.18"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "packageManager": "pnpm@10.17.1"
 }

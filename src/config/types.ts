@@ -30,6 +30,12 @@ export interface ServeConfig {
 }
 
 /**
+ * Configuration for serve command stored in JSON files.
+ * Private keys should be stored in .env file as CVMI_SERVE_PRIVATE_KEY.
+ */
+export type ServeJsonConfig = Omit<ServeConfig, 'privateKey'>;
+
+/**
  * Configuration for the use command (proxy).
  * Maps to NostrTransportOptions but with simpler primitive types.
  */
@@ -45,13 +51,20 @@ export interface UseConfig {
 }
 
 /**
+ * Configuration for use command stored in JSON files.
+ * Private keys should be stored in .env file as CVMI_USE_PRIVATE_KEY.
+ */
+export type UseJsonConfig = Omit<UseConfig, 'privateKey'>;
+
+/**
  * Full cvmi configuration stored in JSON config files.
+ * Note: Private keys are NOT stored in JSON files - use .env file instead.
  */
 export interface CvmiConfig {
   /** Gateway/serve configuration */
-  serve?: Partial<ServeConfig>;
+  serve?: Partial<ServeJsonConfig>;
   /** Proxy/use configuration */
-  use?: Partial<UseConfig>;
+  use?: Partial<UseJsonConfig>;
 }
 
 /**

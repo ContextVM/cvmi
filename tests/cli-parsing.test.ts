@@ -91,6 +91,27 @@ describe('CLI Argument Parsing', () => {
       expect(result.unknownFlags).toEqual(['npx']);
       expect(result.serverArgs).toEqual(['server']);
     });
+
+    it('parses --persist-private-key flag', () => {
+      const result = __test__.parseServeArgs(['--persist-private-key', 'npx', 'server']);
+      expect(result.persistPrivateKey).toBe(true);
+      expect(result.serverArgs).toEqual(['npx', 'server']);
+    });
+
+    it('parses --persist-private-key with other flags', () => {
+      const result = __test__.parseServeArgs([
+        '--persist-private-key',
+        '--private-key',
+        'abc123',
+        '--verbose',
+        'npx',
+        'server',
+      ]);
+      expect(result.persistPrivateKey).toBe(true);
+      expect(result.privateKey).toBe('abc123');
+      expect(result.verbose).toBe(true);
+      expect(result.serverArgs).toEqual(['npx', 'server']);
+    });
   });
 
   describe('parseUseArgs', () => {
@@ -126,6 +147,26 @@ describe('CLI Argument Parsing', () => {
       expect(result.unknownFlags).toEqual(['--private-key (missing value)']);
       // The --verbose should still be processed
       expect(result.verbose).toBe(true);
+    });
+
+    it('parses --persist-private-key flag', () => {
+      const result = __test__.parseUseArgs(['--persist-private-key', 'npub1server']);
+      expect(result.persistPrivateKey).toBe(true);
+      expect(result.serverPubkey).toBe('npub1server');
+    });
+
+    it('parses --persist-private-key with other flags', () => {
+      const result = __test__.parseUseArgs([
+        '--persist-private-key',
+        '--private-key',
+        'abc123',
+        '--verbose',
+        'npub1server',
+      ]);
+      expect(result.persistPrivateKey).toBe(true);
+      expect(result.privateKey).toBe('abc123');
+      expect(result.verbose).toBe(true);
+      expect(result.serverPubkey).toBe('npub1server');
     });
   });
 

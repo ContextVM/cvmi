@@ -12,4 +12,11 @@ export {
   DEFAULT_ENCRYPTION,
 } from './loader.ts';
 
-export type { ServeConfig, UseConfig, CvmiConfig, ConfigPaths } from './types.ts';
+export type {
+  ServeConfig,
+  ServeJsonConfig,
+  UseConfig,
+  UseJsonConfig,
+  CvmiConfig,
+  ConfigPaths,
+} from './types.ts';

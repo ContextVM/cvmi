@@ -1,5 +1,17 @@
 # cvmi
 
+## 0.1.6
+
+### Patch Changes
+
+- feat(cli): add --persist-private-key flag to save keys to .env
+
+  This commit adds the `--persist-private-key` flag to the CLI commands,
+  allowing users to save their private keys to a `.env` file for reuse.
+  It also updates the configuration system to store private keys in `.env`
+  files instead of JSON configuration files, improving security and
+  separation of concerns.
+
 ## 0.1.5
 
 ### Patch Changes

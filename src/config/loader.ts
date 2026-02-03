@@ -2,7 +2,7 @@
  * Simplified configuration loader for cvmi CLI.
  * Uses JSON format and 3-source priority: CLI flags > JSON config > Environment variables.
  */
-import { readFile, access } from 'fs/promises';
+import { readFile, access, appendFile } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
 import { EncryptionMode } from '@contextvm/sdk';
@@ -43,10 +43,18 @@ export function getConfigPaths(customConfigPath?: string): ConfigPaths {
 }
 
 /**
+ * Environment configuration shape returned by loadConfigFromEnv.
+ */
+type EnvConfig = {
+  serve?: Partial<ServeConfig>;
+  use?: Partial<UseConfig>;
+};
+
+/**
  * Load configuration from environment variables.
  */
-export function loadConfigFromEnv(): Partial<CvmiConfig> {
-  const config: Partial<CvmiConfig> = {};
+export function loadConfigFromEnv(): EnvConfig {
+  const config: EnvConfig = {};
 
   // Serve/gateway environment variables
   if (process.env.CVMI_GATEWAY_PRIVATE_KEY || process.env.CVMI_SERVE_PRIVATE_KEY) {
@@ -155,6 +163,7 @@ export async function loadConfig(
   const customConfig = customConfigPath ? await loadConfigFromFile(customConfigPath) : {};
 
   // Merge with priority: CLI > Custom > Project > Global > Environment
+  // Note: envConfig may contain privateKey which is intentionally excluded from JSON types
   return {
     serve: mergeConfigs(
       envConfig.serve,
@@ -229,4 +238,18 @@ export function parseEncryptionMode(
       `Must be one of: optional, required, disabled. Falling back to "optional".`
   );
   return EncryptionMode.OPTIONAL;
+}
+
+/**
+ * Persist a private key to the .env file.
+ * Appends the key as an environment variable entry.
+ * Note: This does not check for duplicates - existing keys will be shadowed by the new entry.
+ */
+export async function savePrivateKeyToEnv(
+  keyType: 'serve' | 'use',
+  privateKey: string
+): Promise<void> {
+  const envVarName = keyType === 'serve' ? 'CVMI_SERVE_PRIVATE_KEY' : 'CVMI_USE_PRIVATE_KEY';
+  const envEntry = `\n${envVarName}=${privateKey}\n`;
+  await appendFile('.env', envEntry, 'utf-8');
 }
