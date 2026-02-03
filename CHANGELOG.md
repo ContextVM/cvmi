@@ -1,5 +1,18 @@
 # cvmi
 
+## 0.1.5
+
+### Patch Changes
+
+- feat(serve): add remote HTTP MCP server support
+  - Add `serve.url` config and `CVMI_SERVE_URL`/`CVMI_GATEWAY_URL` env vars
+  - CLI accepts HTTP(S) URL as first argument for remote servers
+  - Use StreamableHTTPClientTransport for HTTP targets, StdioClientTransport for stdio
+  - Per-client transports for HTTP (required for session isolation)
+  - Custom fetch with GET timeout fallback for servers that don't support GET
+  - Update dependencies: @contextvm/sdk, nostr-tools, @types/node
+  - Add tests and update documentation
+
 ## 0.1.4
 
 ### Patch Changes

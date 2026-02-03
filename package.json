@@ -1,6 +1,6 @@
 {
   "name": "cvmi",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "ContextVM Interface",
   "type": "module",
   "bin": {
@@ -83,8 +83,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@contextvm/sdk": "^0.2.10",
+    "@contextvm/sdk": "^0.3.2",
     "@modelcontextprotocol/sdk": "^1.25.3",
+    "nostr-tools": "^2.23.0",
     "xdg-basedir": "^5.1.0",
     "zod": "^4.3.6"
   },
@@ -92,7 +93,7 @@
     "@changesets/cli": "^2.29.8",
     "@clack/prompts": "^0.11.0",
     "@types/bun": "latest",
-    "@types/node": "^22.19.7",
+    "@types/node": "^22.19.8",
     "gray-matter": "^4.0.3",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",

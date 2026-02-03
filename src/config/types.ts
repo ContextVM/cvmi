@@ -25,6 +25,8 @@ export interface ServeConfig {
   command?: string;
   /** MCP server command arguments */
   args?: string[];
+  /** Optional remote MCP server URL (Streamable HTTP). Mutually exclusive with command/args. */
+  url?: string;
 }
 
 /**

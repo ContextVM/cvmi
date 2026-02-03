@@ -41,6 +41,8 @@ describe('Environment Variable Loading', () => {
     delete process.env.CVMI_SERVE_RELAYS;
     delete process.env.CVMI_SERVE_PUBLIC;
     delete process.env.CVMI_SERVE_ENCRYPTION;
+    delete process.env.CVMI_SERVE_URL;
+    delete process.env.CVMI_GATEWAY_URL;
     delete process.env.CVMI_PROXY_PRIVATE_KEY;
     delete process.env.CVMI_PROXY_RELAYS;
     delete process.env.CVMI_PROXY_SERVER_PUBKEY;
@@ -83,6 +85,12 @@ describe('Environment Variable Loading', () => {
     process.env.CVMI_SERVE_ENCRYPTION = 'required';
     const config = loadConfigFromEnv();
     expect(config.serve?.encryption).toBeDefined();
+  });
+
+  it('loads serve url from environment', () => {
+    process.env.CVMI_SERVE_URL = 'https://example.com/mcp';
+    const config = loadConfigFromEnv();
+    expect(config.serve?.url).toBe('https://example.com/mcp');
   });
 
   it('loads use config from environment (legacy PROXY var)', () => {

@@ -39,6 +39,9 @@ Configuration is stored in JSON format with the following priority:
 - `CVMI_SERVE_*` / legacy `CVMI_GATEWAY_*` for serve/gateway settings
 - `CVMI_USE_*` / legacy `CVMI_PROXY_*` for use/proxy settings
 
+Additional serve env vars:
+- `CVMI_SERVE_URL` / `CVMI_GATEWAY_URL` to set the remote Streamable HTTP MCP server URL
+
 **Logging environment variables (SDK-level):**
 The underlying `@contextvm/sdk` uses these env vars to control logging:
 
@@ -63,6 +66,7 @@ Example global config (`~/.cvmi/config.json`):
 ```json
 {
   "serve": {
+    "url": "https://my.mcp.com/mcp",
     "command": "npx",
     "args": ["@modelcontextprotocol/server-filesystem", "."],
     "privateKey": "nsec1...",
@@ -78,6 +82,8 @@ Example global config (`~/.cvmi/config.json`):
   }
 }
 ```
+
+Note: For `serve`, you should configure either `serve.url` (remote Streamable HTTP MCP server) or `serve.command`/`serve.args` (spawn local stdio MCP server).
 
 Note: The CLI auto-generates a private key if none is provided. Keys can be specified in hex format (with or without `0x` prefix) or NIP-19 bech32 format (`nsec1...` for private keys, `npub1...` for public keys).
 

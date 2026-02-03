@@ -4,11 +4,67 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { NostrMCPGateway, PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
 import { loadConfig, getServeConfig, DEFAULT_RELAYS } from './config/index.ts';
 import { generatePrivateKey, normalizePrivateKey } from './utils/crypto.ts';
 import { waitForShutdownSignal } from './utils/process.ts';
 import { BOLD, DIM, RESET } from './constants/ui.ts';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function createStdioMcpTransport(target: string, args: string[]): Transport {
+  return new StdioClientTransport({
+    command: target,
+    args,
+  });
+}
+
+function createStreamableHttpMcpTransport(target: string): Transport {
+  const url = new URL(target);
+
+  // Streamable HTTP transport *optionally* supports GET (SSE stream) as a push channel.
+  // Some servers incorrectly hang or time out on GET instead of returning 405.
+  // The MCP SDK treats 405 as "no GET SSE" and proceeds in POST-only mode.
+  // We auto-fallback to POST-only if GET does not respond quickly.
+  return new StreamableHTTPClientTransport(url, {
+    fetch: async (input, init) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (method !== 'GET') {
+        return fetch(input, init);
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      try {
+        const response = await fetch(input, {
+          ...init,
+          signal: controller.signal,
+        });
+        return response;
+      } catch {
+        // Treat GET SSE failures/timeouts as "GET not supported".
+        return new Response(null, { status: 405, statusText: 'Method Not Allowed' });
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+  });
+}
+
+// Exported for tests only.
+export const __test__ = {
+  isHttpUrl,
+  createStdioMcpTransport,
+};
 
 /** CLI options for the serve command */
 export interface ServeOptions {
@@ -36,20 +92,15 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
   const config = await loadConfig({ serve: cliFlags }, options.config);
   const serveConfig = getServeConfig(config.serve || {});
 
-  // Check for required command argument early (before generating keys)
-  // Priority: CLI arguments > config.command > error
-  let command: string | undefined;
-  let args: string[] = [];
+  // Resolve MCP target early (before generating keys)
+  // Priority:
+  // - CLI args (positional) override config entirely
+  // - otherwise config.url (remote Streamable HTTP) wins over config.command/config.args
+  const target =
+    serverArgs.length > 0 ? serverArgs[0] : serveConfig.url ? serveConfig.url : serveConfig.command;
+  const targetArgs = serverArgs.length > 0 ? serverArgs.slice(1) : (serveConfig.args ?? []);
 
-  if (serverArgs.length > 0) {
-    command = serverArgs[0];
-    args = serverArgs.slice(1);
-  } else if (serveConfig.command) {
-    command = serveConfig.command;
-    args = serveConfig.args || [];
-  }
-
-  if (!command) {
+  if (!target) {
     showServeHelp();
     process.exit(1);
   }
@@ -76,28 +127,53 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
   if (options.verbose) {
     p.log.message(`Relays: ${relays.join(', ')}`);
     p.log.message(`Public server: ${serveConfig.public ? 'yes' : 'no'}`);
-    p.log.message(`Starting MCP server: ${command} ${args.join(' ')}`);
+    p.log.message(`Starting MCP target: ${target} ${targetArgs.join(' ')}`);
   }
 
-  // Create stdio transport for MCP server
-  const mcpTransport = new StdioClientTransport({
-    command,
-    args,
-  });
+  const logLevel: 'debug' | 'info' = options.verbose ? 'debug' : 'info';
+
+  const nostrTransportOptions = {
+    signer,
+    relayHandler: relays,
+    encryptionMode: serveConfig.encryption,
+    isPublicServer: serveConfig.public,
+    allowedPublicKeys: serveConfig.allowedPubkeys,
+    serverInfo: serveConfig.serverInfo,
+    logLevel,
+  };
 
   // Create gateway
-  const gateway = new NostrMCPGateway({
-    mcpClientTransport: mcpTransport,
-    nostrTransportOptions: {
-      signer,
-      relayHandler: relays,
-      encryptionMode: serveConfig.encryption,
-      isPublicServer: serveConfig.public,
-      allowedPublicKeys: serveConfig.allowedPubkeys,
-      serverInfo: serveConfig.serverInfo,
-      logLevel: options.verbose ? 'debug' : 'info',
-    },
-  });
+  // - stdio targets: single MCP transport shared for all Nostr clients
+  // - Streamable HTTP targets: per-client MCP transports (HTTP transport caches mcp-session-id)
+  let gateway: NostrMCPGateway;
+  try {
+    if (isHttpUrl(target)) {
+      if (targetArgs.length > 0) {
+        // In HTTP mode, extra args are ambiguous and almost certainly a user error.
+        // Keep the error message consistent across the CLI.
+        throw new Error(
+          `Streamable HTTP target does not accept extra args. ` +
+            `Use: cvmi serve https://host/mcp (no additional server args).`
+        );
+      }
+
+      gateway = new NostrMCPGateway({
+        // Per-client mode is required for HTTP transports because the transport maintains
+        // per-session state (e.g., mcp-session-id) and must be isolated per Nostr client.
+        createMcpClientTransport: ({ clientPubkey: _clientPubkey }) =>
+          createStreamableHttpMcpTransport(target),
+        nostrTransportOptions,
+      });
+    } else {
+      gateway = new NostrMCPGateway({
+        mcpClientTransport: createStdioMcpTransport(target, targetArgs),
+        nostrTransportOptions,
+      });
+    }
+  } catch (error) {
+    p.log.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 
   // Start gateway
   await gateway.start();
@@ -116,6 +192,7 @@ export function showServeHelp(): void {
 ${BOLD}Usage:${RESET}
   cvmi serve [options] -- <mcp-server-command> [args...]
   cvmi serve <mcp-server-command> [args...] [options]
+  cvmi serve <http(s)://mcp-server-url> [options]
 
 ${BOLD}Description:${RESET}
   Expose an MCP server over Nostr, making it accessible to remote clients.
@@ -123,7 +200,13 @@ ${BOLD}Description:${RESET}
 
 ${BOLD}Arguments:${RESET}
   <mcp-server-command>    The MCP server command to run (e.g., "npx -y @modelcontextprotocol/server-filesystem /tmp")
-                           Can also be specified in config file under serve.command
+                            Can also be specified in config file under serve.command
+  <mcp-server-url>        If the first argument is an http(s) URL, cvmi will treat it as a Streamable HTTP MCP server
+                            and connect via HTTP instead of spawning a local process.
+
+${BOLD}Config keys:${RESET}
+  serve.url                Optional remote MCP server URL (Streamable HTTP). If set, it is used when no CLI target
+                             is provided. (Mutually exclusive with serve.command/serve.args.)
 
 ${BOLD}Recommended parsing convention:${RESET}
   Use ${BOLD}--${RESET} to separate cvmi flags from the server command.
@@ -146,6 +229,7 @@ ${BOLD}Configuration Sources (priority: CLI > custom config (--config) > project
     CVMI_SERVE_RELAYS, CVMI_GATEWAY_RELAYS
     CVMI_SERVE_PUBLIC, CVMI_GATEWAY_PUBLIC
     CVMI_SERVE_ENCRYPTION, CVMI_GATEWAY_ENCRYPTION
+    CVMI_SERVE_URL, CVMI_GATEWAY_URL
 
 ${BOLD}SDK Logging (set via environment, not config files):${RESET}
     LOG_LEVEL (debug|info|warn|error|silent)
@@ -168,6 +252,7 @@ ${BOLD}SDK Logging (set via environment, not config files):${RESET}
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi serve -- npx -y @modelcontextprotocol/server-filesystem /tmp ${DIM}# start gateway${RESET}
   ${DIM}$${RESET} cvmi serve --verbose -- npx -y @modelcontextprotocol/server-filesystem /tmp --help ${DIM}# pass server flags safely${RESET}
+  ${DIM}$${RESET} cvmi serve https://mcp.server.com ${DIM}# expose a remote Streamable HTTP MCP server over Nostr${RESET}
   ${DIM}$${RESET} cvmi serve npx -y @modelcontextprotocol/server-prompt-generator --public ${DIM}# public server${RESET}
   ${DIM}$${RESET} cvmi serve python /path/to/server.py --relays wss://my-relay.com ${DIM}# custom relay${RESET}
   ${DIM}$${RESET} cvmi serve --help ${DIM}# show this help${RESET}

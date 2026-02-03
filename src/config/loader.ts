@@ -73,6 +73,12 @@ export function loadConfigFromEnv(): Partial<CvmiConfig> {
     config.serve.encryption = parseEncryptionMode(serveEncryption, 'env var');
   }
 
+  const serveUrl = process.env.CVMI_GATEWAY_URL || process.env.CVMI_SERVE_URL;
+  if (serveUrl) {
+    config.serve = config.serve || {};
+    config.serve.url = serveUrl;
+  }
+
   // Use/proxy environment variables
   if (process.env.CVMI_PROXY_PRIVATE_KEY || process.env.CVMI_USE_PRIVATE_KEY) {
     config.use = {
@@ -181,6 +187,7 @@ export function getServeConfig(
     allowedPubkeys: cliFlags.allowedPubkeys ?? config.allowedPubkeys,
     encryption: cliFlags.encryption ?? config.encryption ?? DEFAULT_ENCRYPTION,
     serverInfo: cliFlags.serverInfo ?? config.serverInfo,
+    url: cliFlags.url ?? config.url,
     command: cliFlags.command ?? config.command,
     args: cliFlags.args ?? config.args,
   };

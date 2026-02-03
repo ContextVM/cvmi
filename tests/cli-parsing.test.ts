@@ -62,6 +62,13 @@ describe('CLI Argument Parsing', () => {
       expect(result.unknownFlags).toEqual([]);
     });
 
+    it('allows http(s) URL as the first positional target (remote Streamable HTTP)', () => {
+      const result = __test__.parseServeArgs(['https://my.mcp.com/mcp/', '--verbose']);
+      expect(result.serverArgs).toEqual(['https://my.mcp.com/mcp/']);
+      expect(result.verbose).toBe(true);
+      expect(result.unknownFlags).toEqual([]);
+    });
+
     it('collects unknown flags for strict handling', () => {
       const result = __test__.parseServeArgs(['--encrpytion-mode', 'required', 'npx', 'server']);
       expect(result.unknownFlags).toEqual(['--encrpytion-mode']);
