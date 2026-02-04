@@ -2,7 +2,7 @@
  * Simplified configuration loader for cvmi CLI.
  * Uses JSON format and 3-source priority: CLI flags > JSON config > Environment variables.
  */
-import { readFile, access, appendFile } from 'fs/promises';
+import { readFile, access, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
 import { EncryptionMode } from '@contextvm/sdk';
@@ -242,14 +242,33 @@ export function parseEncryptionMode(
 
 /**
  * Persist a private key to the .env file.
- * Appends the key as an environment variable entry.
- * Note: This does not check for duplicates - existing keys will be shadowed by the new entry.
+ * Skips if the variable already exists (any value).
+ * Otherwise, appends the key as a new entry.
  */
 export async function savePrivateKeyToEnv(
   keyType: 'serve' | 'use',
   privateKey: string
 ): Promise<void> {
   const envVarName = keyType === 'serve' ? 'CVMI_SERVE_PRIVATE_KEY' : 'CVMI_USE_PRIVATE_KEY';
-  const envEntry = `\n${envVarName}=${privateKey}\n`;
-  await appendFile('.env', envEntry, 'utf-8');
+  const envEntry = `${envVarName}=${privateKey}`;
+
+  try {
+    // Try to read existing .env file
+    const existingContent = await readFile('.env', 'utf-8');
+
+    // Check if variable already exists (any value)
+    const exists = existingContent
+      .split('\n')
+      .some((line) => line.trim().startsWith(`${envVarName}=`));
+
+    if (exists) {
+      return;
+    }
+
+    // Append new entry
+    await writeFile('.env', existingContent + '\n' + envEntry + '\n', 'utf-8');
+  } catch {
+    // File doesn't exist, create new one
+    await writeFile('.env', envEntry + '\n', 'utf-8');
+  }
 }

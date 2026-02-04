@@ -241,7 +241,7 @@ describe('savePrivateKeyToEnv', () => {
     expect(envContent).toContain('CVMI_USE_PRIVATE_KEY=test-use-key-456');
   });
 
-  it('appends to existing .env file without overwriting', async () => {
+  it('appends to existing .env file without overwriting other vars', async () => {
     const fs = await import('fs/promises');
     await fs.writeFile('.env', 'EXISTING_VAR=value\n', 'utf-8');
 
@@ -250,5 +250,17 @@ describe('savePrivateKeyToEnv', () => {
     const envContent = await fs.readFile('.env', 'utf-8');
     expect(envContent).toContain('EXISTING_VAR=value');
     expect(envContent).toContain('CVMI_SERVE_PRIVATE_KEY=new-key');
+  });
+
+  it('skips if variable already exists', async () => {
+    const fs = await import('fs/promises');
+    await fs.writeFile('.env', 'CVMI_SERVE_PRIVATE_KEY=existing-key\n', 'utf-8');
+
+    await savePrivateKeyToEnv('serve', 'new-key');
+
+    const envContent = await fs.readFile('.env', 'utf-8');
+    // Should keep the original value, not add duplicate
+    expect(envContent).toContain('CVMI_SERVE_PRIVATE_KEY=existing-key');
+    expect(envContent.split('CVMI_SERVE_PRIVATE_KEY').length).toBe(2); // 1 occurrence + 1 from split
   });
 });

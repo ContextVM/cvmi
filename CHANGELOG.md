@@ -1,5 +1,14 @@
 # cvmi
 
+## 0.1.7
+
+### Patch Changes
+
+- fix(config): skip duplicate private key entries in env file
+
+  Modify savePrivateKeyToEnv to check for existing variable before appending.
+  Add test to verify skip behavior.
+
 ## 0.1.6
 
 ### Patch Changes
