@@ -467,6 +467,7 @@ interface ServeParseResult {
   encryption: EncryptionMode | undefined;
   config: string | undefined;
   persistPrivateKey: boolean;
+  env: Record<string, string> | undefined;
   unknownFlags: string[];
 }
 
@@ -505,6 +506,7 @@ function parseServeArgs(args: string[]): ServeParseResult {
     encryption: undefined,
     config: undefined,
     persistPrivateKey: false,
+    env: undefined,
     unknownFlags: [],
   };
 
@@ -542,6 +544,21 @@ function parseServeArgs(args: string[]): ServeParseResult {
       result.privateKey = consumeValue('--private-key');
     } else if (arg === '--persist-private-key') {
       result.persistPrivateKey = true;
+    } else if (arg === '--env' || arg === '-e') {
+      const raw = consumeValue(arg);
+      if (!raw) continue;
+
+      const equalsIndex = raw.indexOf('=');
+      const key = equalsIndex === -1 ? raw : raw.slice(0, equalsIndex);
+      const value = equalsIndex === -1 ? undefined : raw.slice(equalsIndex + 1);
+
+      if (!key || value === undefined) {
+        result.unknownFlags.push(`${arg} (expected KEY=VALUE)`);
+        continue;
+      }
+
+      result.env = result.env || {};
+      result.env[key] = value;
     } else if (arg === '--relays') {
       const value = consumeValue('--relays');
       result.relays = value ? value.split(',').map((r) => r.trim()) : undefined;
@@ -717,6 +734,7 @@ async function main(): Promise<void> {
         encryption: parsed.encryption,
         config: parsed.config,
         persistPrivateKey: parsed.persistPrivateKey,
+        env: parsed.env,
       });
       break;
     }

@@ -95,6 +95,16 @@ cvmi serve -- npx -y @modelcontextprotocol/server-filesystem /tmp
 
 If you accidentally pass a full command as a single quoted string (e.g. `"npx -y ..."`), `cvmi` will split it into an executable + args for you.
 
+#### Passing environment variables to the spawned MCP server
+
+Use `--env` / `-e` (repeatable):
+
+```bash
+cvmi serve -e LOG_LEVEL=debug -- npx -y @modelcontextprotocol/server-filesystem /tmp
+```
+
+You can also set it in config under `serve.env`.
+
 Note: The CLI auto-generates a private key if none is provided. Keys can be specified in hex format (with or without `0x` prefix) or NIP-19 bech32 format (`nsec1...` for private keys, `npub1...` for public keys).
 
 ## License

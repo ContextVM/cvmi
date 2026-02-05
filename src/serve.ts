@@ -3,7 +3,10 @@
  */
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import {
+  getDefaultEnvironment,
+  StdioClientTransport,
+} from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { NostrMCPGateway, PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
 import { loadConfig, getServeConfig, DEFAULT_RELAYS } from './config/index.ts';
@@ -23,10 +26,15 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
-function createStdioMcpTransport(target: string, args: string[]): Transport {
+function createStdioMcpTransport(
+  target: string,
+  args: string[],
+  env?: Record<string, string>
+): Transport {
   return new StdioClientTransport({
     command: target,
     args,
+    env,
   });
 }
 
@@ -68,6 +76,7 @@ export const __test__ = {
   createStdioMcpTransport,
   splitCommandString,
   normalizeCommandAndArgs,
+  getDefaultEnvironment,
 };
 
 /** CLI options for the serve command */
@@ -79,6 +88,7 @@ export interface ServeOptions {
   encryption?: EncryptionMode;
   verbose?: boolean;
   persistPrivateKey?: boolean;
+  env?: Record<string, string>;
 }
 
 /**
@@ -92,11 +102,19 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
     public: options.public,
     encryption: options.encryption,
     persistPrivateKey: options.persistPrivateKey,
+    env: options.env,
   };
 
   // Load configuration from all sources (CLI flags have highest priority)
   const config = await loadConfig({ serve: cliFlags }, options.config);
   const serveConfig = getServeConfig(config.serve || {});
+
+  const mcpEnv = serveConfig.env
+    ? {
+        ...getDefaultEnvironment(),
+        ...serveConfig.env,
+      }
+    : undefined;
 
   // Resolve MCP target early (before generating keys)
   // Priority:
@@ -185,7 +203,7 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
     } else {
       const normalized = normalizeCommandAndArgs(target, targetArgs);
       gateway = new NostrMCPGateway({
-        mcpClientTransport: createStdioMcpTransport(normalized.command, normalized.args),
+        mcpClientTransport: createStdioMcpTransport(normalized.command, normalized.args, mcpEnv),
         nostrTransportOptions,
       });
     }
@@ -237,6 +255,7 @@ ${BOLD}Options:${RESET}
   --config <path>         Path to custom config JSON file
   --private-key <key>     Nostr private key (hex/nsec format, auto-generated if not provided)
   --persist-private-key   Save private key to .env file for future use
+  --env, -e <k=v>         Pass environment variable to the spawned MCP server (repeatable)
   --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
   --public                Make server publicly accessible (default: private)
   --encryption-mode       Encryption mode: optional, required, disabled (default: optional)
@@ -263,6 +282,7 @@ ${BOLD}SDK Logging (set via environment, not config files):${RESET}
     "serve": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "env": { "LOG_LEVEL": "debug" },
       "relays": ["wss://relay.example.com"],
       "public": false,
       "encryption": "optional"

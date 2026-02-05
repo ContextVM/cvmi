@@ -112,6 +112,19 @@ describe('CLI Argument Parsing', () => {
       expect(result.verbose).toBe(true);
       expect(result.serverArgs).toEqual(['npx', 'server']);
     });
+
+    it('parses -e/--env KEY=VALUE (repeatable)', () => {
+      const result = __test__.parseServeArgs(['-e', 'A=1', '--env', 'B=two', 'npx', 'server']);
+      expect(result.env).toEqual({ A: '1', B: 'two' });
+      expect(result.unknownFlags).toEqual([]);
+      expect(result.serverArgs).toEqual(['npx', 'server']);
+    });
+
+    it('reports malformed -e/--env values', () => {
+      const result = __test__.parseServeArgs(['--env', 'NO_EQUALS', 'npx', 'server']);
+      expect(result.unknownFlags).toEqual(['--env (expected KEY=VALUE)']);
+      expect(result.env).toBeUndefined();
+    });
   });
 
   describe('parseUseArgs', () => {

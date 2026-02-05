@@ -25,6 +25,8 @@ export interface ServeConfig {
   command?: string;
   /** MCP server command arguments */
   args?: string[];
+  /** Environment variables to pass to the spawned MCP server process */
+  env?: Record<string, string>;
   /** Optional remote MCP server URL (Streamable HTTP). Mutually exclusive with command/args. */
   url?: string;
 }

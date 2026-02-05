@@ -1,5 +1,11 @@
 # cvmi
 
+## 0.1.9
+
+### Patch Changes
+
+- feat(serve): add env var support to spawned MCP server
+
 ## 0.1.8
 
 ### Patch Changes

@@ -199,6 +199,7 @@ export function getServeConfig(
     url: cliFlags.url ?? config.url,
     command: cliFlags.command ?? config.command,
     args: cliFlags.args ?? config.args,
+    env: cliFlags.env ?? config.env,
   };
 }
 
