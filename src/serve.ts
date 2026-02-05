@@ -12,6 +12,7 @@ import { waitForShutdownSignal } from './utils/process.ts';
 import { BOLD, DIM, RESET } from './constants/ui.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { savePrivateKeyToEnv } from './config/loader.ts';
+import { normalizeCommandAndArgs, splitCommandString } from './utils/command.ts';
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -65,6 +66,8 @@ function createStreamableHttpMcpTransport(target: string): Transport {
 export const __test__ = {
   isHttpUrl,
   createStdioMcpTransport,
+  splitCommandString,
+  normalizeCommandAndArgs,
 };
 
 /** CLI options for the serve command */
@@ -180,8 +183,9 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
         nostrTransportOptions,
       });
     } else {
+      const normalized = normalizeCommandAndArgs(target, targetArgs);
       gateway = new NostrMCPGateway({
-        mcpClientTransport: createStdioMcpTransport(target, targetArgs),
+        mcpClientTransport: createStdioMcpTransport(normalized.command, normalized.args),
         nostrTransportOptions,
       });
     }

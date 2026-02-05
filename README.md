@@ -85,6 +85,16 @@ Example global config (`~/.cvmi/config.json`):
 
 Note: For `serve`, you should configure either `serve.url` (remote Streamable HTTP MCP server) or `serve.command`/`serve.args` (spawn local stdio MCP server).
 
+#### About quoting commands
+
+`cvmi serve` spawns the MCP server directly (no shell). Prefer passing the command and its arguments as separate tokens:
+
+```bash
+cvmi serve -- npx -y @modelcontextprotocol/server-filesystem /tmp
+```
+
+If you accidentally pass a full command as a single quoted string (e.g. `"npx -y ..."`), `cvmi` will split it into an executable + args for you.
+
 Note: The CLI auto-generates a private key if none is provided. Keys can be specified in hex format (with or without `0x` prefix) or NIP-19 bech32 format (`nsec1...` for private keys, `npub1...` for public keys).
 
 ## License

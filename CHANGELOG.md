@@ -1,5 +1,11 @@
 # cvmi
 
+## 0.1.8
+
+### Patch Changes
+
+- refactor(serve): normalize quoted command strings via shared argv util
+
 ## 0.1.7
 
 ### Patch Changes
