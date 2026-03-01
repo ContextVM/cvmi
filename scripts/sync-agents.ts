@@ -23,7 +23,12 @@ function generateAvailableAgentsTable(): string {
   // Group agents by their paths
   const pathGroups = new Map<
     string,
-    { keys: string[]; displayNames: string[]; skillsDir: string; globalSkillsDir: string }
+    {
+      keys: string[];
+      displayNames: string[];
+      skillsDir: string;
+      globalSkillsDir: string | undefined;
+    }
   >();
 
   for (const [key, a] of Object.entries(agents)) {
@@ -42,7 +47,7 @@ function generateAvailableAgentsTable(): string {
   }
 
   const rows = Array.from(pathGroups.values()).map((group) => {
-    const globalPath = group.globalSkillsDir.replace(homedir(), '~');
+    const globalPath = group.globalSkillsDir?.replace(homedir(), '~') ?? 'N/A';
     const names = group.displayNames.join(', ');
     const keys = group.keys.map((k) => `\`${k}\``).join(', ');
     return `| ${names} | ${keys} | \`${group.skillsDir}/\` | \`${globalPath}/\` |`;

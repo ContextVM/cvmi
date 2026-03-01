@@ -37,6 +37,7 @@
     "ai-agents",
     "amp",
     "antigravity",
+    "augment",
     "claude-code",
     "moltbot",
     "cline",
@@ -44,6 +45,7 @@
     "codex",
     "command-code",
     "continue",
+    "cortex",
     "crush",
     "cursor",
     "droid",
@@ -56,6 +58,7 @@
     "kiro-cli",
     "kode",
     "mcpjam",
+    "mistral-vibe",
     "mux",
     "opencode",
     "openclaude",
@@ -70,7 +73,8 @@
     "windsurf",
     "zencoder",
     "neovate",
-    "pochi"
+    "pochi",
+    "adal"
   ],
   "repository": {
     "type": "git",
