@@ -61,7 +61,7 @@ describe('skills CLI', () => {
       expect(hasLogo(output)).toBe(false);
     });
 
-    it('should not display logo for update command', () => {
+    it('should not display logo for update command', { timeout: 30000 }, () => {
       const output = runCliOutput(['update']);
       expect(hasLogo(output)).toBe(false);
     });

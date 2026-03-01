@@ -6,18 +6,33 @@ export const CVMI_CANONICAL_REPO = 'contextvm/cvmi';
 export const EMBEDDED_SKILLS_SUBPATH = 'skills';
 
 /**
- * Extract owner/repo from a parsed source for telemetry.
+ * Extract owner/repo (or group/subgroup/repo for GitLab) from a parsed source
+ * for lockfile tracking and telemetry.
  * Returns null for local paths or unparseable sources.
+ * Supports any Git host with an owner/repo URL structure, including GitLab subgroups.
  */
 export function getOwnerRepo(parsed: ParsedSource): string | null {
   if (parsed.type === 'local') {
     return null;
   }
 
-  // Extract from git URL: https://github.com/owner/repo.git or similar
-  const match = parsed.url.match(/(?:github|gitlab)\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/);
-  if (match) {
-    return `${match[1]}/${match[2]}`;
+  // Only handle HTTP(S) URLs
+  if (!parsed.url.startsWith('http://') && !parsed.url.startsWith('https://')) {
+    return null;
+  }
+
+  try {
+    const url = new URL(parsed.url);
+    // Get pathname, remove leading slash and trailing .git
+    let path = url.pathname.slice(1);
+    path = path.replace(/\.git$/, '');
+
+    // Must have at least owner/repo (one slash)
+    if (path.includes('/')) {
+      return path;
+    }
+  } catch {
+    // Invalid URL
   }
 
   return null;

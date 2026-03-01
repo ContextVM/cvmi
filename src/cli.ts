@@ -10,8 +10,8 @@ if (process.loadEnvFile) {
 }
 
 import { spawnSync } from 'child_process';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join, dirname, basename } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
@@ -20,6 +20,7 @@ import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { track } from './telemetry.ts';
 import { serve, showServeHelp } from './serve.ts';
 import { showUseHelp, use } from './use.ts';
+import { runSync, parseSyncOptions } from './sync.ts';
 import { parseEncryptionMode } from './config/loader.ts';
 import type { EncryptionMode } from '@contextvm/sdk';
 import { BOLD, DIM, GRAYS, LOGO_LINES, RESET, TEXT } from './constants/ui.ts';
@@ -83,6 +84,8 @@ ${BOLD}Commands:${RESET}
                            https://github.com/contextvm/cvmi
   remove, rm, r     Remove installed skills
   list, ls          List installed skills
+  init [name]       Initialize a new skill (creates SKILL.md)
+  sync              Sync skills from node_modules
   serve             Expose an MCP server over Nostr
   use               Connect to a remote Nostr MCP server
   check             Check for available skill updates
@@ -107,6 +110,11 @@ ${BOLD}Remove Options:${RESET}
 ${BOLD}List Options:${RESET}
   -g, --global           List global skills (default: project)
   -a, --agent <agents>   Filter by specific agents
+
+${BOLD}Sync Options:${RESET}
+  -a, --agent <agents>   Target specific agents
+  -y, --yes              Skip confirmation prompts
+  -f, --force            Force reinstall all skills
 
 ${BOLD}Serve Usage:${RESET}
   cvmi serve [options] -- <mcp-server-command> [args...]
@@ -171,6 +179,71 @@ ${BOLD}Examples:${RESET}
 
 ${BOLD}Aliases:${RESET} rm, r
   `);
+}
+
+// ============================================
+// Init Command
+// ============================================
+
+function runInit(args: string[]): void {
+  const cwd = process.cwd();
+  const skillName = args[0] || basename(cwd);
+  const hasName = args[0] !== undefined;
+
+  const skillDir = hasName ? join(cwd, skillName) : cwd;
+  const skillFile = join(skillDir, 'SKILL.md');
+  const displayPath = hasName ? `${skillName}/SKILL.md` : 'SKILL.md';
+
+  if (existsSync(skillFile)) {
+    console.log(`${TEXT}Skill already exists at ${DIM}${displayPath}${RESET}`);
+    return;
+  }
+
+  if (hasName) {
+    mkdirSync(skillDir, { recursive: true });
+  }
+
+  const skillContent = `---
+name: ${skillName}
+description: A brief description of what this skill does
+---
+
+# ${skillName}
+
+Instructions for the agent to follow when this skill is activated.
+
+## When to use
+
+Describe when this skill should be used.
+
+## Instructions
+
+1. First step
+2. Second step
+3. Additional steps as needed
+`;
+
+  writeFileSync(skillFile, skillContent);
+
+  console.log(`${TEXT}Initialized skill: ${DIM}${skillName}${RESET}`);
+  console.log();
+  console.log(`${DIM}Created:${RESET}`);
+  console.log(`  ${displayPath}`);
+  console.log();
+  console.log(`${DIM}Next steps:${RESET}`);
+  console.log(`  1. Edit ${TEXT}${displayPath}${RESET} to define your skill instructions`);
+  console.log(
+    `  2. Update the ${TEXT}name${RESET} and ${TEXT}description${RESET} in the frontmatter`
+  );
+  console.log();
+  console.log(`${DIM}Publishing:${RESET}`);
+  console.log(
+    `  ${DIM}GitHub:${RESET}  Push to a repo, then ${TEXT}npx skills add <owner>/<repo>${RESET}`
+  );
+  console.log(
+    `  ${DIM}URL:${RESET}     Host the file, then ${TEXT}npx skills add https://example.com/${displayPath}${RESET}`
+  );
+  console.log();
 }
 
 // ============================================
@@ -700,6 +773,16 @@ async function main(): Promise<void> {
     case 'list':
     case 'ls':
       await runList(restArgs);
+      break;
+    case 'init':
+      showLogo();
+      console.log();
+      runInit(restArgs);
+      break;
+    case 'sync':
+      showLogo();
+      const { options: syncOptions } = parseSyncOptions(restArgs);
+      await runSync(restArgs, syncOptions);
       break;
     case 'check':
       runCheck();

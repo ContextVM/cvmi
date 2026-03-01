@@ -45,9 +45,17 @@ interface FindTelemetryData {
   interactive?: '1';
 }
 
+interface SyncTelemetryData {
+  event: 'sync';
+  skillCount: string;
+  successCount: string;
+  agents: string;
+}
+
 type TelemetryData =
   | InstallTelemetryData
   | RemoveTelemetryData
+  | SyncTelemetryData
   | CheckTelemetryData
   | UpdateTelemetryData
   | FindTelemetryData;

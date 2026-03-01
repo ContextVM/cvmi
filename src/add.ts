@@ -34,7 +34,13 @@ import {
   installWellKnownSkillForAgent,
   type InstallMode,
 } from './installer.ts';
-import { detectInstalledAgents, agents } from './agents.ts';
+import {
+  detectInstalledAgents,
+  agents,
+  getUniversalAgents,
+  getNonUniversalAgents,
+} from './agents.ts';
+import { searchMultiselect, cancelSymbol } from './prompts/search-multiselect.ts';
 import { track, setVersion } from './telemetry.ts';
 import { findProvider, wellKnownProvider, type WellKnownSkill } from './providers/index.ts';
 import { fetchMintlifySkill } from './mintlify.ts';
@@ -96,6 +102,10 @@ function multiselect<Value>(opts: {
   }) as Promise<Value[] | symbol>;
 }
 
+// Helper to check if a value is a cancel symbol (works with both clack and custom prompts)
+const isCancelled = (value: unknown): value is symbol =>
+  p.isCancel(value) || value === cancelSymbol;
+
 /**
  * Prompts the user to select agents, pre-selecting the last used agents if available.
  * Saves the selection for future use.
@@ -130,14 +140,14 @@ export async function promptForAgents(
     initialValues = defaultToAll ? validAgents : [];
   }
 
-  const selected = await multiselect({
+  const selected = await searchMultiselect({
     message,
-    options: choices,
+    items: choices,
+    initialSelected: initialValues,
     required: true,
-    initialValues,
   });
 
-  if (!p.isCancel(selected)) {
+  if (!isCancelled(selected)) {
     // Save selection for next time
     try {
       await saveSelectedAgents(selected as string[]);
@@ -150,14 +160,24 @@ export async function promptForAgents(
 }
 
 /**
- * Two-step agent selection: first ask "all agents", "previously selected", or "select specific",
- * then show the multiselect only if user wants to select specific agents.
+ * Agent selection aligned with upstream UX:
+ * - Universal agents are always shown and included by default
+ * - User can install to universal-only, or add extra agent-specific targets
  */
-async function selectAgentsInteractive(
-  availableAgents: AgentType[],
-  options: { global?: boolean }
-): Promise<AgentType[] | symbol> {
-  // Check if we have previously selected agents
+async function selectAgentsInteractive(options: {
+  global?: boolean;
+}): Promise<AgentType[] | symbol> {
+  // Filter by global capability when requested
+  const supportsGlobalFilter = (a: AgentType) => !options.global || agents[a].globalSkillsDir;
+  const filteredAvailable = (Object.keys(agents) as AgentType[]).filter(supportsGlobalFilter);
+
+  // Split by universal/non-universal and preserve detected ordering
+  const universalSet = new Set(getUniversalAgents());
+  const nonUniversalSet = new Set(getNonUniversalAgents());
+  const universalAgents = filteredAvailable.filter((a) => universalSet.has(a));
+  const otherAgents = filteredAvailable.filter((a) => nonUniversalSet.has(a));
+
+  // Check if we have previously selected non-universal agents
   let lastSelected: string[] | undefined;
   try {
     lastSelected = await getLastSelectedAgents();
@@ -165,64 +185,36 @@ async function selectAgentsInteractive(
     // Silently ignore errors reading lock file
   }
 
-  // Filter last selected to only include currently available agents
-  const validLastSelected = lastSelected?.filter((a) =>
-    availableAgents.includes(a as AgentType)
-  ) as AgentType[] | undefined;
+  const validLastSelected = (lastSelected?.filter((a) => otherAgents.includes(a as AgentType)) ??
+    []) as AgentType[];
 
-  // Build options list
-  const selectOptions: Array<{ value: string; label: string; hint: string }> = [];
-  const hasPrevious = validLastSelected && validLastSelected.length > 0;
-
-  // Add "Same as last time" option first if we have valid history (recommended)
-  if (hasPrevious) {
-    const agentNames = validLastSelected.map((a) => agents[a].displayName).join(', ');
-    selectOptions.push({
-      value: 'previous',
-      label: 'Same as last time (Recommended)',
-      hint: agentNames,
-    });
-  }
-
-  selectOptions.push({
-    value: 'all',
-    label: hasPrevious ? 'All detected agents' : 'All detected agents (Recommended)',
-    hint: `Install to all ${availableAgents.length} detected agents`,
-  });
-
-  selectOptions.push({
-    value: 'select',
-    label: 'Select specific agents',
-    hint: 'Choose which agents to install to',
-  });
-
-  // First step: ask if user wants all agents, previous selection, or to select specific ones
-  const installChoice = await p.select({
-    message: 'Install to',
-    options: selectOptions,
-  });
-
-  if (p.isCancel(installChoice)) {
-    return installChoice;
-  }
-
-  if (installChoice === 'all') {
-    return availableAgents;
-  }
-
-  if (installChoice === 'previous' && validLastSelected) {
-    return validLastSelected;
-  }
-
-  // Second step: show multiselect for specific agent selection
-  const agentChoices = availableAgents.map((a) => ({
+  const agentChoices = otherAgents.map((a) => ({
     value: a,
     label: agents[a].displayName,
     hint: `${options.global ? agents[a].globalSkillsDir : agents[a].skillsDir}`,
   }));
 
-  // Use helper to prompt with memory
-  return promptForAgents('Select agents to install skills to', agentChoices, false);
+  const universalSection = {
+    title: 'Universal (.agents/skills)',
+    items: universalAgents.map((a) => ({ value: a, label: agents[a].displayName })),
+  };
+
+  const selected = await searchMultiselect({
+    message: 'Which agents do you want to install to?',
+    items: agentChoices,
+    initialSelected: validLastSelected,
+    lockedSection: universalSection,
+  });
+
+  if (!isCancelled(selected)) {
+    try {
+      await saveSelectedAgents(selected as string[]);
+    } catch {
+      // ignore
+    }
+  }
+
+  return selected as AgentType[] | symbol;
 }
 
 const version = packageJson.version;
@@ -359,7 +351,7 @@ async function handleRemoteSkill(
         );
       }
     } else {
-      const selected = await selectAgentsInteractive(installedAgents, { global: options.global });
+      const selected = await selectAgentsInteractive({ global: options.global });
 
       if (p.isCancel(selected)) {
         p.cancel('Installation cancelled');
@@ -771,7 +763,7 @@ async function handleWellKnownSkills(
         );
       }
     } else {
-      const selected = await selectAgentsInteractive(installedAgents, { global: options.global });
+      const selected = await selectAgentsInteractive({ global: options.global });
 
       if (p.isCancel(selected)) {
         p.cancel('Installation cancelled');
@@ -1157,7 +1149,7 @@ async function handleDirectUrlSkillLegacy(
         );
       }
     } else {
-      const selected = await selectAgentsInteractive(installedAgents, { global: options.global });
+      const selected = await selectAgentsInteractive({ global: options.global });
 
       if (p.isCancel(selected)) {
         p.cancel('Installation cancelled');
@@ -1492,11 +1484,48 @@ export async function runAdd(
     if (options.list) {
       console.log();
       p.log.step(pc.bold('Available Skills'));
+
+      // Group available skills by plugin for list output
+      const groupedSkills: Record<string, Skill[]> = {};
+      const ungroupedSkills: Skill[] = [];
+
       for (const skill of skills) {
-        p.log.message(`  ${pc.cyan(getSkillDisplayName(skill))}`);
-        p.log.message(`    ${pc.dim(skill.description)}`);
+        if (skill.pluginName) {
+          const group = skill.pluginName;
+          if (!groupedSkills[group]) groupedSkills[group] = [];
+          groupedSkills[group].push(skill);
+        } else {
+          ungroupedSkills.push(skill);
+        }
       }
-      console.log();
+
+      // Print groups
+      const sortedGroups = Object.keys(groupedSkills).sort();
+      for (const group of sortedGroups) {
+        // Convert kebab-case to Title Case for display header
+        const title = group
+          .split('-')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+
+        console.log(pc.bold(title));
+        for (const skill of groupedSkills[group]!) {
+          p.log.message(`  ${pc.cyan(getSkillDisplayName(skill))}`);
+          p.log.message(`    ${pc.dim(skill.description)}`);
+        }
+        console.log();
+      }
+
+      // Print ungrouped
+      if (ungroupedSkills.length > 0) {
+        if (sortedGroups.length > 0) console.log(pc.bold('General'));
+        for (const skill of ungroupedSkills) {
+          p.log.message(`  ${pc.cyan(getSkillDisplayName(skill))}`);
+          p.log.message(`    ${pc.dim(skill.description)}`);
+        }
+        console.log();
+      }
+
       p.outro('Use --skill <name> to install specific skills');
       await cleanup(tempDir);
       process.exit(0);
@@ -1514,9 +1543,40 @@ export async function runAdd(
       if (selectedSkills.length === 0) {
         p.log.error(`No matching skills found for: ${options.skill.join(', ')}`);
         p.log.info('Available skills:');
-        for (const s of skills) {
-          p.log.message(`  - ${getSkillDisplayName(s)}`);
+
+        // Group skills for display when listing available skills
+        const groupedSkills: Record<string, Skill[]> = {};
+        const ungroupedSkills: Skill[] = [];
+
+        for (const skill of skills) {
+          if (skill.pluginName) {
+            const group = skill.pluginName;
+            if (!groupedSkills[group]) groupedSkills[group] = [];
+            groupedSkills[group].push(skill);
+          } else {
+            ungroupedSkills.push(skill);
+          }
         }
+
+        const sortedGroups = Object.keys(groupedSkills).sort();
+        for (const group of sortedGroups) {
+          const title = group
+            .split('-')
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ');
+          p.log.message(pc.bold(title));
+          for (const s of groupedSkills[group]!) {
+            p.log.message(`  - ${getSkillDisplayName(s)}`);
+          }
+        }
+
+        if (ungroupedSkills.length > 0) {
+          if (sortedGroups.length > 0) p.log.message(pc.bold('General'));
+          for (const s of ungroupedSkills) {
+            p.log.message(`  - ${getSkillDisplayName(s)}`);
+          }
+        }
+
         await cleanup(tempDir);
         process.exit(1);
       }
@@ -1533,7 +1593,17 @@ export async function runAdd(
       selectedSkills = skills;
       p.log.info(`Installing all ${skills.length} skills`);
     } else {
-      const skillChoices = skills.map((s) => ({
+      // Sort skills by plugin name first, then by skill name
+      const sortedSkills = [...skills].sort((a, b) => {
+        if (a.pluginName && !b.pluginName) return -1;
+        if (!a.pluginName && b.pluginName) return 1;
+        if (a.pluginName && b.pluginName && a.pluginName !== b.pluginName) {
+          return a.pluginName.localeCompare(b.pluginName);
+        }
+        return getSkillDisplayName(a).localeCompare(getSkillDisplayName(b));
+      });
+
+      const skillChoices = sortedSkills.map((s) => ({
         value: s,
         label: getSkillDisplayName(s),
         hint: s.description.length > 60 ? s.description.slice(0, 57) + '...' : s.description,
@@ -1575,9 +1645,7 @@ export async function runAdd(
     } else {
       spinner.start('Detecting installed agents...');
       const installedAgents = await detectInstalledAgents();
-      spinner.stop(
-        `Detected ${installedAgents.length} agent${installedAgents.length !== 1 ? 's' : ''}`
-      );
+      spinner.stop(`${installedAgents.length} agent${installedAgents.length !== 1 ? 's' : ''}`);
 
       if (installedAgents.length === 0) {
         if (options.yes) {
@@ -1617,7 +1685,7 @@ export async function runAdd(
           );
         }
       } else {
-        const selected = await selectAgentsInteractive(installedAgents, { global: options.global });
+        const selected = await selectAgentsInteractive({ global: options.global });
 
         if (p.isCancel(selected)) {
           p.cancel('Installation cancelled');

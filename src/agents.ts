@@ -63,7 +63,7 @@ export const agents: Record<AgentType, AgentConfig> = {
   cline: {
     name: 'cline',
     displayName: 'Cline',
-    skillsDir: '.cline/skills',
+    skillsDir: '.agents/skills',
     globalSkillsDir: join(home, '.cline/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.cline'));
@@ -81,7 +81,7 @@ export const agents: Record<AgentType, AgentConfig> = {
   codex: {
     name: 'codex',
     displayName: 'Codex',
-    skillsDir: '.codex/skills',
+    skillsDir: '.agents/skills',
     globalSkillsDir: join(codexHome, 'skills'),
     detectInstalled: async () => {
       return existsSync(codexHome) || existsSync('/etc/codex');
@@ -105,6 +105,15 @@ export const agents: Record<AgentType, AgentConfig> = {
       return existsSync(join(process.cwd(), '.continue')) || existsSync(join(home, '.continue'));
     },
   },
+  cortex: {
+    name: 'cortex',
+    displayName: 'Cortex Code',
+    skillsDir: '.cortex/skills',
+    globalSkillsDir: join(home, '.snowflake/cortex/skills'),
+    detectInstalled: async () => {
+      return existsSync(join(home, '.snowflake/cortex'));
+    },
+  },
   crush: {
     name: 'crush',
     displayName: 'Crush',
@@ -117,7 +126,7 @@ export const agents: Record<AgentType, AgentConfig> = {
   cursor: {
     name: 'cursor',
     displayName: 'Cursor',
-    skillsDir: '.cursor/skills',
+    skillsDir: '.agents/skills',
     globalSkillsDir: join(home, '.cursor/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.cursor'));
@@ -135,7 +144,7 @@ export const agents: Record<AgentType, AgentConfig> = {
   'gemini-cli': {
     name: 'gemini-cli',
     displayName: 'Gemini CLI',
-    skillsDir: '.gemini/skills',
+    skillsDir: '.agents/skills',
     globalSkillsDir: join(home, '.gemini/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.gemini'));
@@ -144,7 +153,7 @@ export const agents: Record<AgentType, AgentConfig> = {
   'github-copilot': {
     name: 'github-copilot',
     displayName: 'GitHub Copilot',
-    skillsDir: '.github/skills',
+    skillsDir: '.agents/skills',
     globalSkillsDir: join(home, '.copilot/skills'),
     detectInstalled: async () => {
       return existsSync(join(process.cwd(), '.github')) || existsSync(join(home, '.copilot'));
@@ -234,7 +243,7 @@ export const agents: Record<AgentType, AgentConfig> = {
   opencode: {
     name: 'opencode',
     displayName: 'OpenCode',
-    skillsDir: '.opencode/skills',
+    skillsDir: '.agents/skills',
     globalSkillsDir: join(configHome, 'opencode/skills'),
     detectInstalled: async () => {
       return existsSync(join(configHome, 'opencode')) || existsSync(join(claudeHome, 'skills'));
@@ -292,6 +301,7 @@ export const agents: Record<AgentType, AgentConfig> = {
     displayName: 'Replit',
     skillsDir: '.agent/skills',
     globalSkillsDir: undefined,
+    showInUniversalList: false,
     detectInstalled: async () => {
       return existsSync(join(process.cwd(), '.agent'));
     },
@@ -382,4 +392,31 @@ export async function detectInstalledAgents(): Promise<AgentType[]> {
 
 export function getAgentConfig(type: AgentType): AgentConfig {
   return agents[type];
+}
+
+/**
+ * Check if an agent uses the universal .agents/skills directory.
+ * Universal agents share a common skills location across different agents.
+ */
+export function isUniversalAgent(type: AgentType): boolean {
+  return agents[type].skillsDir === '.agents/skills';
+}
+
+/**
+ * Returns agents that use the universal .agents/skills directory.
+ * Agents with showInUniversalList: false are excluded.
+ */
+export function getUniversalAgents(): AgentType[] {
+  return (Object.keys(agents) as AgentType[])
+    .filter((type) => isUniversalAgent(type) && agents[type].showInUniversalList !== false)
+    .sort((a, b) => agents[a].displayName.localeCompare(agents[b].displayName));
+}
+
+/**
+ * Returns agents that use agent-specific skill directories (not universal).
+ */
+export function getNonUniversalAgents(): AgentType[] {
+  return (Object.keys(agents) as AgentType[])
+    .filter((type) => !isUniversalAgent(type))
+    .sort((a, b) => agents[a].displayName.localeCompare(agents[b].displayName));
 }

@@ -1,5 +1,26 @@
 # cvmi
 
+## 0.1.11
+
+### Patch Changes
+
+- feat: align agent selection UX with upstream skills CLI
+
+  - Add interactive search with fuzzy filtering to agent selection
+  - Display locked "Universal (.agents/skills)" section with pre-selected universal agents
+  - Improve visual separation between universal and agent-specific installations
+
+- feat: add `cvmi sync` command for plugin skill synchronization
+
+  Sync skills from agent plugins (e.g., @contextvm/mcp-monitoring) via plugin manifests.
+
+- feat: add `cortex` agent support
+
+- refactor: derive universal agents from skillsDir configuration
+
+  Eliminate hardcoded agent lists by identifying universal agents dynamically
+  based on their `.agents/skills` directory configuration.
+
 ## 0.1.10
 
 ### Patch Changes

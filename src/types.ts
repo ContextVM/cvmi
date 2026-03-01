@@ -3,6 +3,7 @@ export type AgentType =
   | 'antigravity'
   | 'augment'
   | 'claude-code'
+  | 'cortex'
   | 'moltbot'
   | 'cline'
   | 'codebuddy'
@@ -46,6 +47,8 @@ export interface Skill {
   /** Raw SKILL.md content for hashing */
   rawContent?: string;
   metadata?: Record<string, unknown>;
+  /** Name of the plugin this skill belongs to (if discovered via plugin manifest) */
+  pluginName?: string;
 }
 
 export interface AgentConfig {
@@ -55,6 +58,8 @@ export interface AgentConfig {
   /** Global skills directory. Set to undefined if the agent doesn't support global installation. */
   globalSkillsDir: string | undefined;
   detectInstalled: () => Promise<boolean>;
+  /** Whether to show this agent in the universal agents list. Defaults to true. */
+  showInUniversalList?: boolean;
 }
 
 export interface ParsedSource {
