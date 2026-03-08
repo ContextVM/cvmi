@@ -17,6 +17,7 @@ export type {
   ServeJsonConfig,
   UseConfig,
   UseJsonConfig,
+  ServerTargetConfig,
   CvmiConfig,
   ConfigPaths,
 } from './types.ts';

@@ -43,3 +43,38 @@ export function normalizePrivateKey(input: string): string {
 
   return hex.toLowerCase();
 }
+
+/**
+ * Normalize a public key input.
+ *
+ * Accepts:
+ * - 64-char hex strings
+ * - `0x`-prefixed 64-char hex strings
+ * - `npub...` bech32 public keys
+ *
+ * Returns a lowercase 64-char hex string.
+ */
+export function normalizePublicKey(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.length === 0) {
+    throw new Error('Public key is empty');
+  }
+
+  if (trimmed.startsWith('npub')) {
+    const decoded = nip19.decode(trimmed);
+    if (decoded.type !== 'npub') {
+      throw new Error(`Expected npub public key, got ${decoded.type}`);
+    }
+
+    return String(decoded.data).toLowerCase();
+  }
+
+  const hex = trimmed.startsWith('0x') ? trimmed.slice(2) : trimmed;
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error(
+      'Invalid public key format. Expected 64-char hex (optionally 0x-prefixed) or npub...'
+    );
+  }
+
+  return hex.toLowerCase();
+}

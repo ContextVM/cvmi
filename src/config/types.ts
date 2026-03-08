@@ -59,6 +59,20 @@ export interface UseConfig {
 export type UseJsonConfig = Omit<UseConfig, 'privateKey'>;
 
 /**
+ * Named remote server entry used by direct client commands.
+ */
+export interface ServerTargetConfig {
+  /** Canonical Nostr public key (hex or npub) */
+  pubkey: string;
+  /** Relay URLs to use for this server */
+  relays?: string[];
+  /** Encryption mode for communications */
+  encryption?: EncryptionMode;
+  /** Optional display description */
+  description?: string;
+}
+
+/**
  * Full cvmi configuration stored in JSON config files.
  * Note: Private keys are NOT stored in JSON files - use .env file instead.
  */
@@ -67,6 +81,8 @@ export interface CvmiConfig {
   serve?: Partial<ServeJsonConfig>;
   /** Proxy/use configuration */
   use?: Partial<UseJsonConfig>;
+  /** Named server aliases for direct calls */
+  servers?: Record<string, ServerTargetConfig>;
 }
 
 /**

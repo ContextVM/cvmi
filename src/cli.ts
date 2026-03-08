@@ -20,6 +20,7 @@ import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { track } from './telemetry.ts';
 import { serve, showServeHelp } from './serve.ts';
 import { showUseHelp, use } from './use.ts';
+import { call, parseCallArgs, showCallHelp } from './call.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { parseEncryptionMode } from './config/loader.ts';
 import type { EncryptionMode } from '@contextvm/sdk';
@@ -59,6 +60,7 @@ function showBanner(): void {
     ['npx cvmi add [options]', 'Install ContextVM skills'],
     ['npx cvmi serve [options] -- <cmd>', 'Expose MCP server over Nostr'],
     ['npx cvmi use <pubkey>', 'Connect to Nostr MCP server'],
+    ['npx cvmi call <server>', 'Call a remote ContextVM capability'],
     ['npx cvmi check', 'Check for updates'],
     ['npx cvmi update', 'Update all skills'],
   ];
@@ -88,6 +90,7 @@ ${BOLD}Commands:${RESET}
   sync              Sync skills from node_modules
   serve             Expose an MCP server over Nostr
   use               Connect to a remote Nostr MCP server
+  call              Call a remote ContextVM capability
   check             Check for available skill updates
   update            Update all skills to latest versions
 
@@ -143,6 +146,17 @@ ${BOLD}Use Options:${RESET}
   --encryption-mode      Encryption mode: optional, required, disabled
   --verbose              Enable verbose logging
 
+${BOLD}Call Usage:${RESET}
+  cvmi call <server> [capability] [key=value ...]
+
+${BOLD}Call Options:${RESET}
+  --config <path>        Path to custom config JSON file (overrides global config)
+  --private-key <key>    Nostr private key (hex format, auto-generated if not provided)
+  --relays <urls>        Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
+  --encryption-mode      Encryption mode: optional, required, disabled
+  --raw                  Print raw JSON result
+  --verbose              Enable verbose logging
+
 ${BOLD}Options:${RESET}
   --help, -h        Show this help message
   --version, -v     Show version number
@@ -153,6 +167,8 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi add contextvm/cvmi -g        ${DIM}# install from repo, global${RESET}
   ${DIM}$${RESET} cvmi serve -- npx -y @modelcontextprotocol/server-filesystem /tmp ${DIM}# start gateway${RESET}
   ${DIM}$${RESET} cvmi use <server-pubkey>          ${DIM}# connect to remote MCP server${RESET}
+  ${DIM}$${RESET} cvmi call <server>                ${DIM}# list remote capabilities${RESET}
+  ${DIM}$${RESET} cvmi call <server> <tool> x=1     ${DIM}# invoke a remote tool${RESET}
   ${DIM}$${RESET} cvmi list
   ${DIM}$${RESET} cvmi list -g
   ${DIM}$${RESET} cvmi check
@@ -727,6 +743,7 @@ function parseUseArgs(args: string[]): UseParseResult {
 export const __test__ = {
   parseServeArgs,
   parseUseArgs,
+  parseCallArgs,
 };
 
 // ============================================
@@ -844,6 +861,33 @@ async function main(): Promise<void> {
         config: parsed.config,
         persistPrivateKey: parsed.persistPrivateKey,
       });
+      break;
+    }
+    case 'call': {
+      const parsed = parseCallArgs(restArgs);
+
+      if (parsed.unknownFlags.length > 0) {
+        console.error(`Unknown flag(s): ${parsed.unknownFlags.join(', ')}`);
+        console.error(`Run 'cvmi call --help' for usage.`);
+        process.exit(1);
+      }
+
+      if (!parsed.server && parsed.help) {
+        showCallHelp();
+        break;
+      }
+
+      await call(parsed.server, parsed.capability, parsed.input, {
+        debug: parsed.debug,
+        verbose: parsed.verbose,
+        raw: parsed.raw,
+        help: parsed.help,
+        privateKey: parsed.privateKey,
+        relays: parsed.relays,
+        encryption: parsed.encryption,
+        config: parsed.config,
+      });
+      process.exit(0);
       break;
     }
     case '--help':

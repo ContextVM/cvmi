@@ -6,7 +6,13 @@ import { readFile, access, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
 import { EncryptionMode } from '@contextvm/sdk';
-import type { CvmiConfig, ConfigPaths, ServeConfig, UseConfig } from './types.js';
+import type {
+  CvmiConfig,
+  ConfigPaths,
+  ServeConfig,
+  UseConfig,
+  ServerTargetConfig,
+} from './types.js';
 
 /** Default relay URLs */
 export const DEFAULT_RELAYS = ['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai'];
@@ -146,6 +152,19 @@ function mergeConfigs<T>(...sources: (Partial<T> | undefined)[]): Partial<T> {
   }, {} as Partial<T>);
 }
 
+function mergeNamedConfigs<T>(
+  ...sources: (Record<string, T> | undefined)[]
+): Record<string, T> | undefined {
+  const merged: Record<string, T> = {};
+
+  for (const source of sources) {
+    if (!source) continue;
+    Object.assign(merged, source);
+  }
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
 /**
  * Load full configuration with priority: CLI > Custom config > Project config > Global config > Environment.
  * If customConfigPath is provided, it takes precedence over project and global configs (but CLI flags still win).
@@ -178,6 +197,12 @@ export async function loadConfig(
       projectConfig.use,
       customConfig.use,
       cliFlags.use
+    ),
+    servers: mergeNamedConfigs<ServerTargetConfig>(
+      globalConfig.servers,
+      projectConfig.servers,
+      customConfig.servers,
+      cliFlags.servers
     ),
   };
 }

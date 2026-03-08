@@ -8,6 +8,7 @@ describe('skills CLI', () => {
     it('should display help message', () => {
       const output = runCliOutput(['--help']);
       expect(output).toContain('Usage: cvmi <command> [options]');
+      expect(output).toContain('call              Call a remote ContextVM capability');
     });
 
     it('should show same output for -h alias', () => {

@@ -4,3 +4,12 @@
 [submodule "contextvm-docs"]
 	path = contextvm-docs
 	url = https://github.com/contextvm/contextvm-docs
+[submodule "clihub"]
+	path = clihub
+	url = https://github.com/thellimist/clihub.git
+[submodule "mcporter"]
+	path = mcporter
+	url = https://github.com/steipete/mcporter.git
+[submodule "cli"]
+	path = cli
+	url = https://github.com/googleworkspace/cli.git
