@@ -117,8 +117,8 @@ ${BOLD}Description:${RESET}
   This allows you to use remote MCP servers as if they were local.
 
 ${BOLD}Arguments:${RESET}
-  <server-pubkey>         The Nostr public key (npub1 or hex) of the remote MCP server
-                          Can also be specified in config file under use.serverPubkey
+  <server-pubkey>         The server identity (hex, npub, or nprofile) of the remote MCP server
+                           Can also be specified in config file under use.serverPubkey
 
 ${BOLD}Options:${RESET}
   --config <path>         Path to custom config JSON file
@@ -157,6 +157,7 @@ ${BOLD}SDK Logging (set via environment, not config files):${RESET}
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi use npub1q... ${DIM}# connect to remote server by public key${RESET}
+  ${DIM}$${RESET} cvmi use nprofile1q... ${DIM}# connect using an nprofile with relay hints${RESET}
   ${DIM}$${RESET} cvmi use npub1q... --verbose ${DIM}# verbose logging for debugging${RESET}
   ${DIM}$${RESET} cvmi use npub1q... --relays wss://my-relay.com ${DIM}# use specific relay${RESET}
   ${DIM}$${RESET} cvmi use --help ${DIM}# show this help${RESET}

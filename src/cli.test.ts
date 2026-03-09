@@ -63,6 +63,11 @@ describe('skills CLI', () => {
       expect(output).toContain('Usage: cvmi config <command> [...args] [options]');
       expect(output).not.toContain('Unknown config section: add');
     });
+
+    it('should accept nprofile server aliases without validation errors', () => {
+      const output = runCliOutput(['config', 'add', 'weather', 'nprofile1example']);
+      expect(output).not.toContain('Invalid public key format');
+    });
   });
 
   describe('logo display', () => {

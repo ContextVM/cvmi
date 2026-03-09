@@ -115,6 +115,66 @@ describe('parseCallArgs', () => {
     expect(target.isStateless).toBe(false);
   });
 
+  it('preserves nprofile server identities for the SDK transport', () => {
+    const target = __test__.resolveServerTarget(
+      {
+        use: {},
+      },
+      'nprofile1qqsqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqspz4mhxue69uhhyetvv9ujumn0wd68ytnzv9hxgqgswaehxw309ahx7um5wghxuet5d9hkummnw3ezuamfdejsygzx0ps',
+      {}
+    );
+
+    expect(target.server).toBe(
+      'nprofile1qqsqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqspz4mhxue69uhhyetvv9ujumn0wd68ytnzv9hxgqgswaehxw309ahx7um5wghxuet5d9hkummnw3ezuamfdejsygzx0ps'
+    );
+    expect(target.relays).toBeUndefined();
+  });
+
+  it('uses nprofile relay hints in server summary when no explicit relays are configured', () => {
+    const output: string[] = [];
+    const log = console.log;
+    console.log = (message?: unknown) => output.push(String(message ?? ''));
+
+    try {
+      const target = __test__.resolveServerTarget(
+        {
+          use: {},
+        },
+        'nprofile1qqs82p5zxq7f7rw66av5rdy7mjw5dcldxp4eacen2vu2yx37gpx9lgcpr9mhxue69uhhyetvv9ujucm0de6x27r5wekjummjvu4speke',
+        {}
+      );
+
+      __test__.printServerSummary(target, [] as any);
+    } finally {
+      console.log = log;
+    }
+
+    expect(output.map((line) => stripAnsi(line))).toEqual([
+      'Server: nprofile1qqs82p5zxq7f7rw66av5rdy7mjw5dcldxp4eacen2vu2yx37gpx9lgcpr9mhxue69uhhyetvv9ujucm0de6x27r5wekjummjvu4speke',
+      'Relays: wss://relay.contextvm.org',
+      'Tools: 0',
+      '  (no tools exposed)',
+    ]);
+  });
+
+  it('preserves explicit configured relays for nprofile aliases', () => {
+    const target = __test__.resolveServerTarget(
+      {
+        servers: {
+          relatr: {
+            pubkey:
+              'nprofile1qqsqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqspz4mhxue69uhhyetvv9ujumn0wd68ytnzv9hxgqgswaehxw309ahx7um5wghxuet5d9hkummnw3ezuamfdejsygzx0ps',
+            relays: ['wss://override.example'],
+          },
+        },
+      },
+      'relatr',
+      {}
+    );
+
+    expect(target.relays).toEqual(['wss://override.example']);
+  });
+
   it('renders server help summary with a single server pubkey line', () => {
     const output: string[] = [];
     const log = console.log;
@@ -151,10 +211,38 @@ describe('parseCallArgs', () => {
     }
 
     expect(output.map((line) => stripAnsi(line))).toEqual([
-      'Server pubkey: npub1w5rgyvpunuxa446egx6fahyagm376vrtnm3nx5ec5gdruszvt73spqeu4t (relatr)',
+      'Server: npub1w5rgyvpunuxa446egx6fahyagm376vrtnm3nx5ec5gdruszvt73spqeu4t (relatr)',
       'Relays: wss://relay.contextvm.org',
       'Tools: 1',
       '  - search_profiles: Search profiles',
+    ]);
+  });
+
+  it('renders nprofile server identities without forcing npub normalization', () => {
+    const output: string[] = [];
+    const log = console.log;
+    console.log = (message?: unknown) => output.push(String(message ?? ''));
+
+    try {
+      __test__.printServerSummary(
+        {
+          input: 'nprofile1example',
+          server: 'nprofile1example',
+          relays: ['wss://relay.contextvm.org'],
+          encryption: EncryptionMode.OPTIONAL,
+          isStateless: true,
+        },
+        [] as any
+      );
+    } finally {
+      console.log = log;
+    }
+
+    expect(output.map((line) => stripAnsi(line))).toEqual([
+      'Server: nprofile1example',
+      'Relays: wss://relay.contextvm.org',
+      'Tools: 0',
+      '  (no tools exposed)',
     ]);
   });
 

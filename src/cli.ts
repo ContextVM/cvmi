@@ -309,8 +309,6 @@ async function runConfigCommand(args: string[]): Promise<void> {
 
   const { listServerAliases, removeServerAlias, upsertServerAlias } =
     await import('./config/loader.ts');
-  const { normalizePublicKey } = await import('./utils/crypto.ts');
-
   if (action === 'add') {
     const [alias, pubkey, ...optionArgs] = rest;
     if (!alias || !pubkey) {
@@ -326,7 +324,7 @@ async function runConfigCommand(args: string[]): Promise<void> {
     const configPath = await upsertServerAlias(
       alias,
       {
-        pubkey: normalizePublicKey(pubkey),
+        pubkey,
         ...(options.relays ? { relays: options.relays } : {}),
         ...(options.encryption ? { encryption: options.encryption } : {}),
         ...(options.description ? { description: options.description } : {}),

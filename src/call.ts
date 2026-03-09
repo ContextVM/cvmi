@@ -1,6 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { NostrClientTransport, PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
+import { PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
+import { NostrClientTransport } from '@contextvm/sdk/transport';
 import { nip19 } from 'nostr-tools';
 import {
   loadConfig,
@@ -44,8 +45,8 @@ export interface ParseCallResult {
 
 interface ResolvedServerTarget {
   input: string;
-  pubkey: string;
-  relays: string[];
+  server: string;
+  relays?: string[];
   encryption: EncryptionMode;
   isStateless: boolean;
   aliasName?: string;
@@ -158,13 +159,20 @@ function resolveServerTarget(
   options: CallOptions
 ): ResolvedServerTarget {
   const alias = getAlias(config, serverInput);
-  const useConfig = getUseConfig(config.use || {});
+  const configuredUse = config.use || {};
+  const useConfig = getUseConfig(configuredUse);
   const configuredStateless = config.use?.isStateless;
+  const resolvedServer = alias?.pubkey ?? serverInput;
+  const isNprofileIdentity = resolvedServer.startsWith('nprofile');
 
   return {
     input: serverInput,
-    pubkey: normalizePublicKey(alias?.pubkey ?? serverInput),
-    relays: options.relays ?? alias?.relays ?? useConfig.relays ?? DEFAULT_RELAYS,
+    server: resolvedServer,
+    relays:
+      options.relays ??
+      alias?.relays ??
+      configuredUse.relays ??
+      (isNprofileIdentity ? undefined : (useConfig.relays ?? DEFAULT_RELAYS)),
     encryption:
       options.encryption ?? alias?.encryption ?? useConfig.encryption ?? EncryptionMode.OPTIONAL,
     isStateless: options.isStateless ?? alias?.isStateless ?? configuredStateless ?? true,
@@ -174,7 +182,28 @@ function resolveServerTarget(
 }
 
 function formatDisplayPubkey(pubkey: string): string {
-  return nip19.npubEncode(pubkey);
+  try {
+    return nip19.npubEncode(normalizePublicKey(pubkey));
+  } catch {
+    return pubkey;
+  }
+}
+
+function getDisplayRelays(target: ResolvedServerTarget): string[] {
+  if (target.relays && target.relays.length > 0) {
+    return target.relays;
+  }
+
+  try {
+    const decoded = nip19.decode(target.server);
+    if (decoded.type === 'nprofile') {
+      return decoded.data.relays ?? [];
+    }
+  } catch {
+    // Fall back below when the server identity is not a decodable nprofile.
+  }
+
+  return DEFAULT_RELAYS;
 }
 
 function logVerbose(enabled: boolean | undefined, message: string): void {
@@ -212,8 +241,9 @@ async function createRemoteClient(target: ResolvedServerTarget, options: CallOpt
   const signer = new PrivateKeySigner(privateKey);
   const transport = new NostrClientTransport({
     signer,
-    relayHandler: target.relays,
-    serverPubkey: target.pubkey,
+    relayHandler: target.relays ?? [],
+    serverPubkey: target.server,
+    discoveryRelayUrls: DEFAULT_RELAYS,
     encryptionMode: target.encryption,
     isStateless: target.isStateless,
     logLevel: options.debug ? 'debug' : 'silent',
@@ -233,10 +263,10 @@ async function createRemoteClient(target: ResolvedServerTarget, options: CallOpt
 
 function printServerSummary(target: ResolvedServerTarget, tools: Tool[]): void {
   const serverLabel = target.aliasName
-    ? `${formatDisplayPubkey(target.pubkey)} (${target.aliasName})`
-    : formatDisplayPubkey(target.pubkey);
-  console.log(`${BOLD}Server pubkey:${RESET} ${serverLabel}`);
-  console.log(`${BOLD}Relays:${RESET} ${target.relays.join(', ')}`);
+    ? `${formatDisplayPubkey(target.server)} (${target.aliasName})`
+    : formatDisplayPubkey(target.server);
+  console.log(`${BOLD}Server:${RESET} ${serverLabel}`);
+  console.log(`${BOLD}Relays:${RESET} ${getDisplayRelays(target).join(', ')}`);
   if (target.description) {
     console.log(`${BOLD}Description:${RESET} ${target.description}`);
   }
@@ -303,10 +333,7 @@ export async function call(
   }
 
   const target = resolveServerTarget(config, serverInput, options);
-  logVerbose(
-    options.verbose,
-    `Connecting to ${target.aliasName ?? formatDisplayPubkey(target.pubkey)}...`
-  );
+  logVerbose(options.verbose, `Connecting to ${target.aliasName ?? target.server}...`);
   const remote = await createRemoteClient(target, {
     ...options,
     privateKey: options.privateKey ?? loadCallPrivateKeyFromEnv(),
@@ -362,7 +389,7 @@ ${BOLD}Description:${RESET}
   Connect directly to a remote ContextVM server and inspect or invoke its capabilities.
 
 ${BOLD}Arguments:${RESET}
-  <server>                Server pubkey (npub1 or hex) or configured alias
+  <server>                Server identity (hex, npub, nprofile) or configured alias
   <capability>            Capability selector, currently tool name or tool:<name>
   key=value               Input arguments for tool calls
 
@@ -387,5 +414,6 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi call weather weather.get_current city=Lisbon
   ${DIM}$${RESET} cvmi call weather --debug
   ${DIM}$${RESET} cvmi call npub1... tool:weather.get_current city=Lisbon --raw
+  ${DIM}$${RESET} cvmi call nprofile1... tool:weather.get_current city=Lisbon
   `);
 }

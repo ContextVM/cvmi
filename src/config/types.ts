@@ -46,7 +46,7 @@ export interface UseConfig {
   privateKey: string;
   /** Relay URLs (defaults to wss://relay.contextvm.org and wss://cvm.otherstuff.ai) */
   relays: string[];
-  /** Server's public key to connect to */
+  /** Server identity to connect to (hex, npub, or nprofile) */
   serverPubkey?: string;
   /** Encryption mode for communications */
   encryption?: EncryptionMode;
@@ -64,7 +64,7 @@ export type UseJsonConfig = Omit<UseConfig, 'privateKey'>;
  * Named remote server entry used by direct client commands.
  */
 export interface ServerTargetConfig {
-  /** Canonical Nostr public key (hex or npub) */
+  /** Remote server identity stored in aliases, typically hex, npub, or nprofile */
   pubkey: string;
   /** Relay URLs to use for this server */
   relays?: string[];
