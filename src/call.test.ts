@@ -150,9 +150,11 @@ describe('parseCallArgs', () => {
     }
 
     expect(output.map((line) => stripAnsi(line))).toEqual([
-      'Server: nprofile1qqs82p5zxq7f7rw66av5rdy7mjw5dcldxp4eacen2vu2yx37gpx9lgcpr9mhxue69uhhyetvv9ujucm0de6x27r5wekjummjvu4speke',
-      'Relays: wss://relay.contextvm.org',
-      'Tools: 0',
+      'Server',
+      '  Identity: nprofile1qqs82p5zxq7f7rw66av5rdy7mjw5dcldxp4eacen2vu2yx37gpx9lgcpr9mhxue69uhhyetvv9ujucm0de6x27r5wekjummjvu4speke',
+      '  Relays: wss://relay.contextvm.org',
+      '  Tools: 0',
+      '',
       '  (no tools exposed)',
     ]);
   });
@@ -211,10 +213,12 @@ describe('parseCallArgs', () => {
     }
 
     expect(output.map((line) => stripAnsi(line))).toEqual([
-      'Server: npub1w5rgyvpunuxa446egx6fahyagm376vrtnm3nx5ec5gdruszvt73spqeu4t (relatr)',
-      'Relays: wss://relay.contextvm.org',
-      'Tools: 1',
-      '  - search_profiles: Search profiles',
+      'Server',
+      '  Identity: npub1w5rgyvpunuxa446egx6fahyagm376vrtnm3nx5ec5gdruszvt73spqeu4t (relatr)',
+      '  Relays: wss://relay.contextvm.org',
+      '  Tools: 1',
+      '',
+      '  • search_profiles — Search profiles',
     ]);
   });
 
@@ -239,9 +243,11 @@ describe('parseCallArgs', () => {
     }
 
     expect(output.map((line) => stripAnsi(line))).toEqual([
-      'Server: nprofile1example',
-      'Relays: wss://relay.contextvm.org',
-      'Tools: 0',
+      'Server',
+      '  Identity: nprofile1example',
+      '  Relays: wss://relay.contextvm.org',
+      '  Tools: 0',
+      '',
       '  (no tools exposed)',
     ]);
   });
@@ -300,14 +306,17 @@ describe('parseCallArgs', () => {
     }
 
     expect(output.map((line) => stripAnsi(line))).toEqual([
-      'Usage: cvmi call relatr search_profiles [key=value ...] [options]',
+      'Usage',
+      '  cvmi call relatr search_profiles [key=value ...] [options]',
       '',
-      'Capability: search_profiles',
-      'Kind: tool',
-      'Description: Search profiles',
-      'Input:',
+      'Capability',
+      '  Name: search_profiles',
+      '  Kind: tool',
+      '  Description: Search profiles',
+      '',
+      'Input',
       '  - query: string',
-      'Output:',
+      'Output',
       '  - results: object[]',
       '    - pubkey: string',
       '    - trustScore: number',

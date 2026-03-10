@@ -30,8 +30,28 @@ function renderStructuredValue(value: unknown, indent = 0): void {
 
     for (const item of value) {
       if (item !== null && typeof item === 'object') {
-        console.log(`${prefix}-`);
-        renderStructuredValue(item, indent + 2);
+        const entries = Object.entries(item);
+        if (entries.length === 0) {
+          console.log(`${prefix}- {}`);
+          continue;
+        }
+
+        const [firstKey, firstValue] = entries[0]!;
+        if (firstValue !== null && typeof firstValue === 'object') {
+          console.log(`${prefix}- ${firstKey}:`);
+          renderStructuredValue(firstValue, indent + 4);
+        } else {
+          console.log(`${prefix}- ${firstKey}: ${String(firstValue)}`);
+        }
+
+        for (const [key, entryValue] of entries.slice(1)) {
+          if (entryValue !== null && typeof entryValue === 'object') {
+            console.log(`${prefix}  ${key}:`);
+            renderStructuredValue(entryValue, indent + 4);
+          } else {
+            console.log(`${prefix}  ${key}: ${String(entryValue)}`);
+          }
+        }
       } else {
         console.log(`${prefix}- ${String(item)}`);
       }

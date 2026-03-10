@@ -21,6 +21,7 @@ import { track } from './telemetry.ts';
 import { serve, showServeHelp } from './serve.ts';
 import { showUseHelp, use } from './use.ts';
 import { call, parseCallArgs, showCallHelp } from './call.ts';
+import { discover, parseDiscoverArgs, showDiscoverHelp } from './discover.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { parseEncryptionMode } from './config/loader.ts';
 import type { EncryptionMode } from '@contextvm/sdk';
@@ -60,6 +61,7 @@ function showBanner(): void {
     ['npx cvmi add [options]', 'Install ContextVM skills'],
     ['npx cvmi serve [options] -- <cmd>', 'Expose MCP server over Nostr'],
     ['npx cvmi use <pubkey>', 'Connect to Nostr MCP server'],
+    ['npx cvmi discover', 'Discover announced servers on relays'],
     ['npx cvmi call <server>', 'Call a remote ContextVM capability'],
     ['npx cvmi check', 'Check for updates'],
     ['npx cvmi update', 'Update all skills'],
@@ -90,6 +92,7 @@ ${BOLD}Commands:${RESET}
   sync              Sync skills from node_modules
   serve             Expose an MCP server over Nostr
   use               Connect to a remote Nostr MCP server
+  discover          Discover announced ContextVM servers on relays
   call              Call a remote ContextVM capability
   check             Check for available skill updates
   update            Update all skills to latest versions
@@ -149,12 +152,21 @@ ${BOLD}Use Options:${RESET}
 ${BOLD}Call Usage:${RESET}
   cvmi call <server> [capability] [key=value ...]
 
+${BOLD}Discover Usage:${RESET}
+  cvmi discover [options]
+
 ${BOLD}Call Options:${RESET}
   --config <path>        Path to custom config JSON file (overrides global config)
   --private-key <key>    Nostr private key (hex format, auto-generated if not provided)
   ${DIM}env:${RESET} CVMI_CALL_PRIVATE_KEY
   --relays <urls>        Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
   --encryption-mode      Encryption mode: optional, required, disabled
+  --raw                  Print raw JSON result
+  --verbose              Enable verbose logging
+
+${BOLD}Discover Options:${RESET}
+  --relays <urls>        Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
+  --limit <n>            Limit the number of returned servers
   --raw                  Print raw JSON result
   --verbose              Enable verbose logging
 
@@ -168,6 +180,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi add contextvm/cvmi -g        ${DIM}# install from repo, global${RESET}
   ${DIM}$${RESET} cvmi serve -- npx -y @modelcontextprotocol/server-filesystem /tmp ${DIM}# start gateway${RESET}
   ${DIM}$${RESET} cvmi use <server-pubkey>          ${DIM}# connect to remote MCP server${RESET}
+  ${DIM}$${RESET} cvmi discover                      ${DIM}# find public ContextVM servers${RESET}
   ${DIM}$${RESET} cvmi call <server>                ${DIM}# list remote capabilities${RESET}
   ${DIM}$${RESET} cvmi call <server> <tool> x=1     ${DIM}# invoke a remote tool${RESET}
   ${DIM}$${RESET} cvmi list
@@ -1057,6 +1070,28 @@ async function main(): Promise<void> {
         encryption: parsed.encryption,
         config: parsed.config,
         persistPrivateKey: parsed.persistPrivateKey,
+      });
+      break;
+    }
+    case 'discover': {
+      const parsed = parseDiscoverArgs(restArgs);
+
+      if (parsed.unknownFlags.length > 0) {
+        console.error(`Unknown flag(s): ${parsed.unknownFlags.join(', ')}`);
+        console.error(`Run 'cvmi discover --help' for usage.`);
+        process.exit(1);
+      }
+
+      if (parsed.help) {
+        showDiscoverHelp();
+        break;
+      }
+
+      await discover({
+        relays: parsed.relays,
+        raw: parsed.raw,
+        verbose: parsed.verbose,
+        limit: parsed.limit,
       });
       break;
     }

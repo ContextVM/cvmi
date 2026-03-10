@@ -1,5 +1,17 @@
 # cvmi
 
+## 0.2.1
+
+### Patch Changes
+
+- feat(cli): add discover command to find public ContextVM servers
+
+  Add new 'cvmi discover' command that queries relays for public ContextVM
+  server announcements (kind 11316). Users can specify relays, limit results,
+  and get raw JSON output.
+
+  Also improves 'cvmi call' with loading spinners and better output formatting.
+
 ## 0.2.0
 
 ### Minor Changes

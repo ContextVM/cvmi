@@ -1,3 +1,4 @@
+import * as p from '@clack/prompts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
@@ -11,7 +12,7 @@ import {
 } from './config/index.ts';
 import type { CvmiConfig, ServerTargetConfig } from './config/index.ts';
 import { generatePrivateKey, normalizePrivateKey, normalizePublicKey } from './utils/crypto.ts';
-import { BOLD, DIM, RESET, TEXT } from './constants/ui.ts';
+import { BOLD, CYAN, DIM, RESET, TEXT } from './constants/ui.ts';
 import { renderDefaultResult } from './call/render-result.ts';
 import { renderSchemaProperties, renderToolSchema } from './call/render-schema.ts';
 
@@ -214,13 +215,27 @@ function logVerbose(enabled: boolean | undefined, message: string): void {
 
 function renderToolList(tools: Tool[]): void {
   if (tools.length === 0) {
-    console.log('  (no tools exposed)');
+    console.log(`  ${DIM}(no tools exposed)${RESET}`);
     return;
   }
 
   for (const tool of tools) {
-    console.log(`  - ${tool.name}${tool.description ? `: ${tool.description}` : ''}`);
+    console.log(
+      `  ${CYAN}•${RESET} ${tool.name}${tool.description ? ` ${DIM}— ${tool.description}${RESET}` : ''}`
+    );
   }
+}
+
+function printSection(title: string): void {
+  console.log(`${BOLD}${title}${RESET}`);
+}
+
+function printSummaryRow(label: string, value: string): void {
+  console.log(`  ${DIM}${label}:${RESET} ${value}`);
+}
+
+function createCallSpinner(enabled: boolean) {
+  return enabled ? p.spinner() : null;
 }
 
 export const __test__ = {
@@ -265,42 +280,46 @@ function printServerSummary(target: ResolvedServerTarget, tools: Tool[]): void {
   const serverLabel = target.aliasName
     ? `${formatDisplayPubkey(target.server)} (${target.aliasName})`
     : formatDisplayPubkey(target.server);
-  console.log(`${BOLD}Server:${RESET} ${serverLabel}`);
-  console.log(`${BOLD}Relays:${RESET} ${getDisplayRelays(target).join(', ')}`);
+  printSection('Server');
+  printSummaryRow('Identity', serverLabel);
+  printSummaryRow('Relays', getDisplayRelays(target).join(', '));
   if (target.description) {
-    console.log(`${BOLD}Description:${RESET} ${target.description}`);
+    printSummaryRow('Description', target.description);
   }
-  console.log(`${BOLD}Tools:${RESET} ${tools.length}`);
+  printSummaryRow('Tools', String(tools.length));
+  console.log();
   renderToolList(tools);
 }
 
 function printServerHelp(target: ResolvedServerTarget, tools: Tool[]): void {
-  console.log(`${BOLD}Usage:${RESET} cvmi call <server> <capability> [key=value ...] [options]`);
+  printSection('Usage');
+  console.log(`  cvmi call <server> <capability> [key=value ...] [options]`);
   console.log();
   printServerSummary(target, tools);
   console.log();
-  console.log(`${BOLD}Examples:${RESET}`);
+  printSection('Examples');
   console.log(`  ${DIM}$${RESET} cvmi call ${target.input}`);
   console.log(`  ${DIM}$${RESET} cvmi call ${target.input} <tool> --help`);
   console.log(`  ${DIM}$${RESET} cvmi call ${target.input} <tool> key=value`);
 }
 
 function printToolHelp(target: ResolvedServerTarget, tool: Tool): void {
-  console.log(
-    `${BOLD}Usage:${RESET} cvmi call ${target.input} ${tool.name} [key=value ...] [options]`
-  );
+  printSection('Usage');
+  console.log(`  cvmi call ${target.input} ${tool.name} [key=value ...] [options]`);
   console.log();
-  console.log(`${BOLD}Capability:${RESET} ${tool.name}`);
-  console.log(`${BOLD}Kind:${RESET} tool`);
+  printSection('Capability');
+  printSummaryRow('Name', tool.name);
+  printSummaryRow('Kind', 'tool');
   if (tool.description) {
-    console.log(`${BOLD}Description:${RESET} ${tool.description}`);
+    printSummaryRow('Description', tool.description);
   }
-  console.log(`${BOLD}Input:${RESET}`);
+  console.log();
+  printSection('Input');
   renderToolSchema(tool);
 
   const outputSchema = (tool as Tool & { outputSchema?: Record<string, unknown> }).outputSchema;
   if (outputSchema) {
-    console.log(`${BOLD}Output:${RESET}`);
+    printSection('Output');
     renderSchemaProperties(outputSchema, 'output fields');
   }
 }
@@ -315,6 +334,7 @@ export async function call(
   input: Record<string, unknown>,
   options: CallOptions
 ): Promise<void> {
+  const spinner = createCallSpinner(!options.raw);
   const config = await loadConfig(
     {
       use: {
@@ -334,6 +354,14 @@ export async function call(
 
   const target = resolveServerTarget(config, serverInput, options);
   logVerbose(options.verbose, `Connecting to ${target.aliasName ?? target.server}...`);
+  const loadingLabel = capabilityArg
+    ? options.help
+      ? `Loading ${resolveToolName(capabilityArg)} help...`
+      : `Calling ${resolveToolName(capabilityArg)}...`
+    : options.help
+      ? `Loading ${target.aliasName ?? formatDisplayPubkey(target.server)} help...`
+      : `Loading ${target.aliasName ?? formatDisplayPubkey(target.server)}...`;
+  spinner?.start(loadingLabel);
   const remote = await createRemoteClient(target, {
     ...options,
     privateKey: options.privateKey ?? loadCallPrivateKeyFromEnv(),
@@ -343,6 +371,7 @@ export async function call(
     if (!capabilityArg) {
       logVerbose(options.verbose, 'Discovering tools...');
       const toolsResult = await remote.client.listTools();
+      spinner?.stop('Loaded');
       const tools = toolsResult.tools;
       if (options.help) {
         printServerHelp(target, tools);
@@ -356,6 +385,7 @@ export async function call(
     if (options.help) {
       logVerbose(options.verbose, 'Discovering tools...');
       const toolsResult = await remote.client.listTools();
+      spinner?.stop('Loaded');
       const tool = toolsResult.tools.find((entry) => entry.name === toolName);
       if (!tool) {
         throw new Error(`Capability not found: ${capabilityArg}`);
@@ -369,6 +399,7 @@ export async function call(
       name: toolName,
       arguments: input,
     });
+    spinner?.stop('Completed');
 
     if (options.raw) {
       console.log(JSON.stringify(result, null, 2));
@@ -376,6 +407,9 @@ export async function call(
     }
 
     renderDefaultResult(result);
+  } catch (error) {
+    spinner?.stop('Failed');
+    throw error;
   } finally {
     await remote.close();
   }

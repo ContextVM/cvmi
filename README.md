@@ -20,6 +20,7 @@ npx cvmi add --skill overview
 - [x] `cvmi add --skill <name>` - Install specific skills
 - [x] `cvmi serve` - Expose a server (gateway)
 - [x] `cvmi use` - Use a server from nostr as stdio (proxy)
+- [x] `cvmi discover` - Discover announced servers on relays
 - [ ] `cvmi cn` - Compile a server to code (ctxcn)
 - [x] `cvmi call` - Call methods from a server
 - [ ] `cvmi inspect` - Inspect server schema
@@ -119,6 +120,31 @@ cvmi call weather tool:weather.get_current city=Lisbon
 
 # Use an alternate config file
 cvmi call weather tool:weather.get_current city=Lisbon --config ./custom.cvmi.json
+```
+
+### `cvmi discover`
+
+[`cvmi discover`](src/discover.ts) queries relay-stored server announcement events so you can find public ContextVM servers before using [`cvmi call`](src/call.ts:329).
+
+It is intentionally config-less and straightforward:
+
+- pass relays explicitly with `--relays`, or
+- rely on the built-in default relays
+
+Examples:
+
+```bash
+# Discover public servers on the default relays
+cvmi discover
+
+# Discover on a specific relay
+cvmi discover --relays wss://relay.contextvm.org
+
+# Limit the number of returned announcements
+cvmi discover --limit 10
+
+# Get machine-readable JSON output
+cvmi discover --raw
 ```
 
 Note: For `serve`, you should configure either `serve.url` (remote Streamable HTTP MCP server) or `serve.command`/`serve.args` (spawn local stdio MCP server).
