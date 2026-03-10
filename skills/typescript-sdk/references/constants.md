@@ -16,14 +16,14 @@ const PROMPTS_LIST_KIND = 11320; // Prompts announcement
 
 ```typescript
 const NOSTR_TAGS = {
-  PUBKEY: "p", // Recipient public key
-  EVENT_ID: "e", // Event reference
-  CAPABILITY: "cap", // Pricing metadata
-  NAME: "name", // Server name
-  WEBSITE: "website", // Server website
-  PICTURE: "picture", // Server icon
-  ABOUT: "about", // Server description
-  SUPPORT_ENCRYPTION: "support_encryption",
+  PUBKEY: 'p', // Recipient public key
+  EVENT_ID: 'e', // Event reference
+  CAPABILITY: 'cap', // Pricing metadata
+  NAME: 'name', // Server name
+  WEBSITE: 'website', // Server website
+  PICTURE: 'picture', // Server icon
+  ABOUT: 'about', // Server description
+  SUPPORT_ENCRYPTION: 'support_encryption',
 } as const;
 ```
 
@@ -31,9 +31,9 @@ const NOSTR_TAGS = {
 
 ```typescript
 enum EncryptionMode {
-  OPTIONAL = "optional",
-  REQUIRED = "required",
-  DISABLED = "disabled",
+  OPTIONAL = 'optional',
+  REQUIRED = 'required',
+  DISABLED = 'disabled',
 }
 ```
 
@@ -43,10 +43,10 @@ Maps capability types to MCP methods:
 
 ```typescript
 const announcementMethods = {
-  server: "initialize",
-  tools: "tools/list",
-  resources: "resources/list",
-  resourceTemplates: "resources/templates/list",
-  prompts: "prompts/list",
+  server: 'initialize',
+  tools: 'tools/list',
+  resources: 'resources/list',
+  resourceTemplates: 'resources/templates/list',
+  prompts: 'prompts/list',
 } as const;
 ```

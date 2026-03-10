@@ -51,4 +51,3 @@ Notes:
 - Treat LNbits keys as secrets.
 - Use separate wallets/permissions for server and client roles.
 - If verification or relay propagation is slow, tune TTL/polling on the processor.
-

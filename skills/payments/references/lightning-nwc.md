@@ -46,4 +46,3 @@ The client-side NWC wallet must be able to **pay invoices**.
 - `payment_required` never arrives: verify the capability is priced and the request matches `method` + `name`.
 - Payment fails: verify client wallet permissions and available balance.
 - Payment succeeds but `payment_accepted` never arrives: verify server relay connectivity and processor verification.
-

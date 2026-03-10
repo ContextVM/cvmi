@@ -38,7 +38,7 @@ interface RelayHandler {
   subscribe(
     filters: Filter[],
     onEvent: (event: NostrEvent) => void,
-    onEose?: () => void,
+    onEose?: () => void
   ): Promise<void>;
 
   /** Unsubscribe from all active subscriptions */

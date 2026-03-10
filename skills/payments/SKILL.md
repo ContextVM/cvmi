@@ -12,7 +12,7 @@ Payments are implemented as **middleware around transports**:
 - **Server-side** middleware gates priced requests: it must not forward to the underlying MCP server until payment is verified.
 - **Client-side** middleware listens for payment notifications, executes a handler, then continues the original request.
 
-This skill documents *how to use* the SDK payments layer. For transport setup (signers, relays, encryption), see:
+This skill documents _how to use_ the SDK payments layer. For transport setup (signers, relays, encryption), see:
 
 - [`../typescript-sdk/SKILL.md`](../typescript-sdk/SKILL.md)
 - [`../server-dev/SKILL.md`](../server-dev/SKILL.md)
@@ -24,10 +24,7 @@ This skill documents *how to use* the SDK payments layer. For transport setup (s
 
 ```ts
 import type { PricedCapability } from '@contextvm/sdk/payments';
-import {
-  LnBolt11NwcPaymentProcessor,
-  withServerPayments,
-} from '@contextvm/sdk/payments';
+import { LnBolt11NwcPaymentProcessor, withServerPayments } from '@contextvm/sdk/payments';
 
 const pricedCapabilities: PricedCapability[] = [
   {
@@ -52,10 +49,7 @@ const paidTransport = withServerPayments(baseTransport, {
 ### Client: attach a handler and pay automatically
 
 ```ts
-import {
-  LnBolt11NwcPaymentHandler,
-  withClientPayments,
-} from '@contextvm/sdk/payments';
+import { LnBolt11NwcPaymentHandler, withClientPayments } from '@contextvm/sdk/payments';
 
 const handler = new LnBolt11NwcPaymentHandler({
   nwcConnectionString: process.env.NWC_CLIENT_CONNECTION!,
@@ -88,7 +82,7 @@ Each payment rail is identified by a **PMI** string (example: `bitcoin-lightning
 
 ### Amounts: advertise vs settle
 
-`pricedCapabilities[].amount` + `currencyUnit` are what you *advertise* (discovery). The selected PMI determines how you *settle*.
+`pricedCapabilities[].amount` + `currencyUnit` are what you _advertise_ (discovery). The selected PMI determines how you _settle_.
 
 If you use dynamic pricing via `resolvePrice`, the amount you return must match the unit expected by your chosen processor.
 

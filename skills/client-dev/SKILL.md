@@ -12,21 +12,18 @@ Build MCP clients that connect to ContextVM servers over the Nostr network.
 Connect to a ContextVM server:
 
 ```typescript
-import { Client } from "@modelcontextprotocol/sdk/client";
+import { Client } from '@modelcontextprotocol/sdk/client';
 import {
   NostrClientTransport,
   PrivateKeySigner,
   ApplesauceRelayPool,
   EncryptionMode,
-} from "@contextvm/sdk";
+} from '@contextvm/sdk';
 
 const signer = new PrivateKeySigner(process.env.CLIENT_PRIVATE_KEY!);
-const relayPool = new ApplesauceRelayPool([
-  "wss://relay.contextvm.org",
-  "wss://cvm.otherstuff.ai",
-]);
+const relayPool = new ApplesauceRelayPool(['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai']);
 
-const SERVER_PUBKEY = "server-public-key-hex";
+const SERVER_PUBKEY = 'server-public-key-hex';
 
 const transport = new NostrClientTransport({
   signer,
@@ -36,8 +33,8 @@ const transport = new NostrClientTransport({
 });
 
 const client = new Client({
-  name: "my-client",
-  version: "1.0.0",
+  name: 'my-client',
+  version: '1.0.0',
 });
 
 await client.connect(transport);
@@ -45,8 +42,8 @@ await client.connect(transport);
 // Use the client
 const tools = await client.listTools();
 const result = await client.callTool({
-  name: "echo",
-  arguments: { message: "Hello" },
+  name: 'echo',
+  arguments: { message: 'Hello' },
 });
 ```
 
@@ -60,7 +57,7 @@ Connect when you know the server's public key:
 const transport = new NostrClientTransport({
   signer,
   relayHandler: relayPool,
-  serverPubkey: "known-server-pubkey",
+  serverPubkey: 'known-server-pubkey',
 });
 ```
 
@@ -69,7 +66,7 @@ const transport = new NostrClientTransport({
 Find servers broadcasting on the network:
 
 ```typescript
-import { CTXVM_MESSAGES_KIND, SERVER_ANNOUNCEMENT_KIND } from "@contextvm/sdk";
+import { CTXVM_MESSAGES_KIND, SERVER_ANNOUNCEMENT_KIND } from '@contextvm/sdk';
 
 // Query relays for server announcements
 await relayPool.subscribe([{ kinds: [SERVER_ANNOUNCEMENT_KIND] }], (event) => {
@@ -108,8 +105,8 @@ const transport = new NostrClientTransport({
 Use `NostrMCPProxy` to connect existing MCP clients to ContextVM servers:
 
 ```typescript
-import { NostrMCPProxy } from "@contextvm/sdk";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { NostrMCPProxy } from '@contextvm/sdk';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 const proxy = new NostrMCPProxy({
   // Local transport for existing client to connect to

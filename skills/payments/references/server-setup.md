@@ -27,10 +27,7 @@ Processors create `pay_req` and later verify settlement.
 Built-in Lightning rail (NWC):
 
 ```ts
-import {
-  LnBolt11NwcPaymentProcessor,
-  withServerPayments,
-} from '@contextvm/sdk/payments';
+import { LnBolt11NwcPaymentProcessor, withServerPayments } from '@contextvm/sdk/payments';
 
 const processor = new LnBolt11NwcPaymentProcessor({
   nwcConnectionString: process.env.NWC_SERVER_CONNECTION!,
@@ -95,4 +92,3 @@ const resolvePrice: ResolvePriceFn = async ({ capability, clientPubkey }) => {
 ```
 
 When payment is waived, the request is forwarded immediately without emitting `payment_required` or `payment_accepted` notifications.
-

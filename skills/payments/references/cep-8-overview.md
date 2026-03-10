@@ -28,4 +28,3 @@ Payments are a middleware layer around transports:
 - payments middleware handles pricing decisions, payment notifications, and gating
 
 Security invariant for servers: priced requests must **fail closed** (no unpaid forwarding).
-
