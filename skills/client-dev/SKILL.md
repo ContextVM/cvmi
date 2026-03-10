@@ -12,21 +12,18 @@ Build MCP clients that connect to ContextVM servers over the Nostr network.
 Connect to a ContextVM server:
 
 ```typescript
-import { Client } from "@modelcontextprotocol/sdk/client";
+import { Client } from '@modelcontextprotocol/sdk/client';
 import {
   NostrClientTransport,
   PrivateKeySigner,
   ApplesauceRelayPool,
   EncryptionMode,
-} from "@contextvm/sdk";
+} from '@contextvm/sdk';
 
 const signer = new PrivateKeySigner(process.env.CLIENT_PRIVATE_KEY!);
-const relayPool = new ApplesauceRelayPool([
-  "wss://relay.contextvm.org",
-  "wss://cvm.otherstuff.ai",
-]);
+const relayPool = new ApplesauceRelayPool(['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai']);
 
-const SERVER_PUBKEY = "server-public-key-hex";
+const SERVER_PUBKEY = 'server-public-key-hex';
 
 const transport = new NostrClientTransport({
   signer,
@@ -35,8 +32,8 @@ const transport = new NostrClientTransport({
 });
 
 const client = new Client({
-  name: "my-client",
-  version: "1.0.0",
+  name: 'my-client',
+  version: '1.0.0',
 });
 
 await client.connect(transport);
@@ -44,8 +41,8 @@ await client.connect(transport);
 // Use the client
 const tools = await client.listTools();
 const result = await client.callTool({
-  name: "echo",
-  arguments: { message: "Hello" },
+  name: 'echo',
+  arguments: { message: 'Hello' },
 });
 ```
 
@@ -58,7 +55,12 @@ Connect when you know the server's public key:
 ```typescript
 const transport = new NostrClientTransport({
   signer,
+<<<<<<< feat/call
+  relayHandler: relayPool,
+  serverPubkey: 'known-server-pubkey',
+=======
   serverPubkey: "known-server-pubkey",
+>>>>>>> main
 });
 ```
 
@@ -67,7 +69,7 @@ const transport = new NostrClientTransport({
 Find servers broadcasting on the network:
 
 ```typescript
-import { CTXVM_MESSAGES_KIND, SERVER_ANNOUNCEMENT_KIND } from "@contextvm/sdk";
+import { CTXVM_MESSAGES_KIND, SERVER_ANNOUNCEMENT_KIND } from '@contextvm/sdk';
 
 // Query relays for server announcements
 await relayPool.subscribe([{ kinds: [SERVER_ANNOUNCEMENT_KIND] }], (event) => {
@@ -79,15 +81,15 @@ await relayPool.subscribe([{ kinds: [SERVER_ANNOUNCEMENT_KIND] }], (event) => {
 
 ## NostrClientTransport Options
 
-| Option               | Type                       | Description                                                      |
-| -------------------- | -------------------------- | ---------------------------------------------------------------- |
-| `signer`             | `NostrSigner`              | Required. Signs all Nostr events                                 |
-| `relayHandler`       | `RelayHandler \| string[]` | Optional explicit operational relays                             |
-| `serverPubkey`       | `string`                   | Required. Target server's public key                             |
-| `discoveryRelayUrls` | `string[]`                 | Optional relay URLs for CEP-17 discovery lookups                 |
-| `encryptionMode`     | `EncryptionMode`           | `OPTIONAL`, `REQUIRED`, or `DISABLED`                            |
-| `isStateless`        | `boolean`                  | Skip initialization handshake. Default: `false`                  |
-| `logLevel`           | `LogLevel`                 | Logging verbosity                                                |
+| Option               | Type                       | Description                                      |
+| -------------------- | -------------------------- | ------------------------------------------------ |
+| `signer`             | `NostrSigner`              | Required. Signs all Nostr events                 |
+| `relayHandler`       | `RelayHandler \| string[]` | Optional explicit operational relays             |
+| `serverPubkey`       | `string`                   | Required. Target server's public key             |
+| `discoveryRelayUrls` | `string[]`                 | Optional relay URLs for CEP-17 discovery lookups |
+| `encryptionMode`     | `EncryptionMode`           | `OPTIONAL`, `REQUIRED`, or `DISABLED`            |
+| `isStateless`        | `boolean`                  | Skip initialization handshake. Default: `false`  |
+| `logLevel`           | `LogLevel`                 | Logging verbosity                                |
 
 ### Relay Resolution Order
 
@@ -117,8 +119,8 @@ const transport = new NostrClientTransport({
 Use `NostrMCPProxy` to connect existing MCP clients to ContextVM servers:
 
 ```typescript
-import { NostrMCPProxy } from "@contextvm/sdk";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { NostrMCPProxy } from '@contextvm/sdk';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 const proxy = new NostrMCPProxy({
   // Local transport for existing client to connect to

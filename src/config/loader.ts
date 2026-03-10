@@ -2,11 +2,17 @@
  * Simplified configuration loader for cvmi CLI.
  * Uses JSON format and 3-source priority: CLI flags > JSON config > Environment variables.
  */
-import { readFile, access, writeFile } from 'fs/promises';
+import { readFile, access, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
 import { EncryptionMode } from '@contextvm/sdk';
-import type { CvmiConfig, ConfigPaths, ServeConfig, UseConfig } from './types.js';
+import type {
+  CvmiConfig,
+  ConfigPaths,
+  ServeConfig,
+  UseConfig,
+  ServerTargetConfig,
+} from './types.js';
 
 /** Default relay URLs */
 export const DEFAULT_RELAYS = ['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai'];
@@ -50,6 +56,14 @@ type EnvConfig = {
   use?: Partial<UseConfig>;
 };
 
+export type ConfigScope = 'project' | 'global' | 'custom';
+
+export interface ResolvedServerTargetConfig extends ServerTargetConfig {
+  name: string;
+  scope: ConfigScope;
+  configPath: string;
+}
+
 /**
  * Load configuration from environment variables.
  */
@@ -90,7 +104,7 @@ export function loadConfigFromEnv(): EnvConfig {
   // Use/proxy environment variables
   if (process.env.CVMI_PROXY_PRIVATE_KEY || process.env.CVMI_USE_PRIVATE_KEY) {
     config.use = {
-      privateKey: process.env.CVMI_PROXY_PRIVATE_KEY || process.env.CVMI_USE_PRIVATE_KEY,
+      privateKey: process.env.CVMI_USE_PRIVATE_KEY || process.env.CVMI_PROXY_PRIVATE_KEY,
     };
   }
 
@@ -112,7 +126,17 @@ export function loadConfigFromEnv(): EnvConfig {
     config.use.encryption = parseEncryptionMode(useEncryption, 'env var');
   }
 
+  const useStateless = process.env.CVMI_PROXY_STATELESS || process.env.CVMI_USE_STATELESS;
+  if (useStateless) {
+    config.use = config.use || {};
+    config.use.isStateless = useStateless === 'true';
+  }
+
   return config;
+}
+
+export function loadCallPrivateKeyFromEnv(): string | undefined {
+  return process.env.CVMI_CALL_PRIVATE_KEY;
 }
 
 /**
@@ -122,7 +146,20 @@ async function loadConfigFromFile(filePath: string): Promise<Partial<CvmiConfig>
   try {
     await access(filePath);
     const content = await readFile(filePath, 'utf-8');
-    return JSON.parse(content) as Partial<CvmiConfig>;
+    const parsed = JSON.parse(content) as Partial<CvmiConfig> & {
+      serve?: Partial<ServeConfig> & { privateKey?: string };
+      use?: Partial<UseConfig> & { privateKey?: string };
+    };
+
+    if (parsed.serve && 'privateKey' in parsed.serve) {
+      delete parsed.serve.privateKey;
+    }
+
+    if (parsed.use && 'privateKey' in parsed.use) {
+      delete parsed.use.privateKey;
+    }
+
+    return parsed;
   } catch {
     return {};
   }
@@ -144,6 +181,19 @@ function mergeConfigs<T>(...sources: (Partial<T> | undefined)[]): Partial<T> {
     }
     return acc;
   }, {} as Partial<T>);
+}
+
+function mergeNamedConfigs<T>(
+  ...sources: (Record<string, T> | undefined)[]
+): Record<string, T> | undefined {
+  const merged: Record<string, T> = {};
+
+  for (const source of sources) {
+    if (!source) continue;
+    Object.assign(merged, source);
+  }
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 /**
@@ -178,6 +228,12 @@ export async function loadConfig(
       projectConfig.use,
       customConfig.use,
       cliFlags.use
+    ),
+    servers: mergeNamedConfigs<ServerTargetConfig>(
+      globalConfig.servers,
+      projectConfig.servers,
+      customConfig.servers,
+      cliFlags.servers
     ),
   };
 }
@@ -215,7 +271,111 @@ export function getUseConfig(
     relays: cliFlags.relays ?? config.relays ?? DEFAULT_RELAYS,
     serverPubkey: cliFlags.serverPubkey ?? config.serverPubkey,
     encryption: cliFlags.encryption ?? config.encryption ?? DEFAULT_ENCRYPTION,
+    isStateless: cliFlags.isStateless ?? config.isStateless ?? false,
   };
+}
+
+export async function listServerAliases(
+  scope: ConfigScope | 'merged' = 'merged',
+  customConfigPath?: string
+): Promise<ResolvedServerTargetConfig[]> {
+  const paths = getConfigPaths(customConfigPath);
+  const globalConfig = await loadConfigFromFile(paths.globalConfig);
+  const projectConfig = await loadConfigFromFile(paths.projectConfig);
+  const customConfig = customConfigPath ? await loadConfigFromFile(customConfigPath) : {};
+
+  const toEntries = (
+    source: Record<string, ServerTargetConfig> | undefined,
+    sourceScope: ConfigScope,
+    configPath: string
+  ): ResolvedServerTargetConfig[] =>
+    Object.entries(source ?? {}).map(([name, value]) => ({
+      name,
+      ...value,
+      scope: sourceScope,
+      configPath,
+    }));
+
+  if (scope === 'global') {
+    return toEntries(globalConfig.servers, 'global', paths.globalConfig);
+  }
+
+  if (scope === 'project') {
+    return toEntries(projectConfig.servers, 'project', paths.projectConfig);
+  }
+
+  if (scope === 'custom') {
+    return toEntries(customConfig.servers, 'custom', paths.customConfigPath ?? paths.projectConfig);
+  }
+
+  const merged = new Map<string, ResolvedServerTargetConfig>();
+  for (const entry of toEntries(globalConfig.servers, 'global', paths.globalConfig)) {
+    merged.set(entry.name, entry);
+  }
+  for (const entry of toEntries(projectConfig.servers, 'project', paths.projectConfig)) {
+    merged.set(entry.name, entry);
+  }
+  for (const entry of toEntries(
+    customConfig.servers,
+    'custom',
+    paths.customConfigPath ?? paths.projectConfig
+  )) {
+    merged.set(entry.name, entry);
+  }
+
+  return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function upsertServerAlias(
+  name: string,
+  target: ServerTargetConfig,
+  scope: Exclude<ConfigScope, 'custom'>,
+  customConfigPath?: string
+): Promise<string> {
+  const paths = getConfigPaths(customConfigPath);
+  const configPath = scope === 'global' ? paths.globalConfig : paths.projectConfig;
+  const existing = await loadConfigFromFile(configPath);
+  const nextConfig: CvmiConfig = {
+    ...existing,
+    servers: {
+      ...(existing.servers ?? {}),
+      [name]: target,
+    },
+  };
+
+  if (scope === 'global') {
+    await mkdir(paths.globalDir, { recursive: true });
+  }
+
+  await writeFile(configPath, JSON.stringify(nextConfig, null, 2) + '\n', 'utf-8');
+  return configPath;
+}
+
+export async function removeServerAlias(
+  name: string,
+  scope: Exclude<ConfigScope, 'custom'>,
+  customConfigPath?: string
+): Promise<{ removed: boolean; configPath: string }> {
+  const paths = getConfigPaths(customConfigPath);
+  const configPath = scope === 'global' ? paths.globalConfig : paths.projectConfig;
+  const existing = await loadConfigFromFile(configPath);
+
+  if (!existing.servers?.[name]) {
+    return { removed: false, configPath };
+  }
+
+  const servers = { ...(existing.servers ?? {}) };
+  delete servers[name];
+
+  const nextConfig: CvmiConfig = { ...existing };
+  if (Object.keys(servers).length > 0) {
+    nextConfig.servers = servers;
+  } else {
+    delete nextConfig.servers;
+  }
+
+  await writeFile(configPath, JSON.stringify(nextConfig, null, 2) + '\n', 'utf-8');
+  return { removed: true, configPath };
 }
 
 /**

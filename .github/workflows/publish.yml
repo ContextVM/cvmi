@@ -4,13 +4,13 @@ on:
   push:
     branches: [main]
     tags:
-      - "v*"
+      - 'v*'
     paths-ignore:
-      - "**/*.md"
+      - '**/*.md'
   workflow_dispatch:
     inputs:
       bump:
-        description: "Version bump type"
+        description: 'Version bump type'
         required: true
         type: choice
         options:
@@ -39,7 +39,7 @@ jobs:
         with:
           node-version: lts/*
           cache: pnpm
-          registry-url: "https://registry.npmjs.org"
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

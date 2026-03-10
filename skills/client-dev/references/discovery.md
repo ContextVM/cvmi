@@ -8,7 +8,7 @@ Direct connection when you know the server's pubkey:
 const transport = new NostrClientTransport({
   signer,
   relayHandler: relayPool,
-  serverPubkey: "known-pubkey-hex",
+  serverPubkey: 'known-pubkey-hex',
 });
 ```
 
@@ -17,7 +17,7 @@ const transport = new NostrClientTransport({
 Find servers on the network:
 
 ```typescript
-import { SERVER_ANNOUNCEMENT_KIND } from "@contextvm/sdk";
+import { SERVER_ANNOUNCEMENT_KIND } from '@contextvm/sdk';
 
 const servers = new Map();
 
@@ -45,9 +45,7 @@ await relayPool.subscribe([{ kinds: [SERVER_ANNOUNCEMENT_KIND] }], (event) => {
   }
 
   // Check for encryption support
-  const supportsEncryption = event.tags.some(
-    (t) => t[0] === "support_encryption",
-  );
+  const supportsEncryption = event.tags.some((t) => t[0] === 'support_encryption');
 });
 ```
 
@@ -56,11 +54,7 @@ await relayPool.subscribe([{ kinds: [SERVER_ANNOUNCEMENT_KIND] }], (event) => {
 Query multiple relays for redundancy:
 
 ```typescript
-const relayUrls = [
-  "wss://relay.contextvm.org",
-  "wss://cvm.otherstuff.ai",
-  "wss://nos.lol",
-];
+const relayUrls = ['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai', 'wss://nos.lol'];
 
 const relayPool = new ApplesauceRelayPool(relayUrls);
 ```

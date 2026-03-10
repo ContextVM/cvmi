@@ -12,42 +12,35 @@ Build MCP servers that expose capabilities over Nostr using the `@contextvm/sdk`
 Create a basic ContextVM server:
 
 ```typescript
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { NostrServerTransport } from "@contextvm/sdk";
-import { PrivateKeySigner } from "@contextvm/sdk";
-import { ApplesauceRelayPool } from "@contextvm/sdk";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { NostrServerTransport } from '@contextvm/sdk';
+import { PrivateKeySigner } from '@contextvm/sdk';
+import { ApplesauceRelayPool } from '@contextvm/sdk';
 
 const signer = new PrivateKeySigner(process.env.SERVER_PRIVATE_KEY!);
-const relayPool = new ApplesauceRelayPool([
-  "wss://relay.contextvm.org",
-  "wss://cvm.otherstuff.ai",
-]);
+const relayPool = new ApplesauceRelayPool(['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai']);
 
 const server = new McpServer({
-  name: "my-server",
-  version: "1.0.0",
+  name: 'my-server',
+  version: '1.0.0',
 });
 
 // Register tools
-server.registerTool(
-  "echo",
-  { description: "Echo back the input" },
-  async ({ message }) => ({
-    content: [{ type: "text", text: `Echo: ${message}` }],
-  }),
-);
+server.registerTool('echo', { description: 'Echo back the input' }, async ({ message }) => ({
+  content: [{ type: 'text', text: `Echo: ${message}` }],
+}));
 
 const transport = new NostrServerTransport({
   signer,
   relayHandler: relayPool,
   serverInfo: {
-    name: "My ContextVM Server",
-    website: "https://example.com",
+    name: 'My ContextVM Server',
+    website: 'https://example.com',
   },
 });
 
 await server.connect(transport);
-console.log("Server running on Nostr");
+console.log('Server running on Nostr');
 ```
 
 ## NostrServerTransport Options
@@ -76,7 +69,7 @@ Restrict which clients can connect:
 const transport = new NostrServerTransport({
   signer,
   relayHandler: relayPool,
-  allowedPublicKeys: ["client1-pubkey-hex", "client2-pubkey-hex"],
+  allowedPublicKeys: ['client1-pubkey-hex', 'client2-pubkey-hex'],
 });
 ```
 
@@ -88,10 +81,10 @@ Allow specific operations from any client:
 const transport = new NostrServerTransport({
   signer,
   relayHandler: relayPool,
-  allowedPublicKeys: ["trusted-client"],
+  allowedPublicKeys: ['trusted-client'],
   excludedCapabilities: [
-    { method: "tools/list" }, // Anyone can list tools
-    { method: "tools/call", name: "public_tool" }, // Specific tool is public
+    { method: 'tools/list' }, // Anyone can list tools
+    { method: 'tools/call', name: 'public_tool' }, // Specific tool is public
   ],
 });
 ```
@@ -106,11 +99,11 @@ const transport = new NostrServerTransport({
   relayHandler: relayPool,
   isPublicServer: true,
   publishRelayList: true,
-  bootstrapRelayUrls: ["wss://relay.damus.io", "wss://nos.lol"],
+  bootstrapRelayUrls: ['wss://relay.damus.io', 'wss://nos.lol'],
   serverInfo: {
-    name: "Weather Service",
-    about: "Get weather data worldwide",
-    website: "https://weather.example.com",
+    name: 'Weather Service',
+    about: 'Get weather data worldwide',
+    website: 'https://weather.example.com',
   },
 });
 ```

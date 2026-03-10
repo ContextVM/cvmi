@@ -18,14 +18,14 @@ Nostr Client <---> NostrMCPGateway <---> Existing MCP Server
 ## Example
 
 ```typescript
-import { NostrMCPGateway } from "@contextvm/sdk";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { NostrMCPGateway } from '@contextvm/sdk';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 const gateway = new NostrMCPGateway({
   // Connect to existing server via stdio
   mcpClientTransport: new StdioClientTransport({
-    command: "bun",
-    args: ["run", "./existing-server.ts"],
+    command: 'bun',
+    args: ['run', './existing-server.ts'],
   }),
 
   // Expose on Nostr

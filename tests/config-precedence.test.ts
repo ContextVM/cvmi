@@ -47,6 +47,7 @@ describe('Config Precedence', () => {
     delete process.env.CVMI_SERVE_PRIVATE_KEY;
     delete process.env.CVMI_PROXY_PRIVATE_KEY;
     delete process.env.CVMI_USE_PRIVATE_KEY;
+    delete process.env.CVMI_CALL_PRIVATE_KEY;
   });
 
   afterEach(async () => {
@@ -67,15 +68,25 @@ describe('Config Precedence', () => {
     expect(paths.globalConfig).toContain(baseDir);
 
     await mkdir(paths.globalDir, { recursive: true });
-    await writeFile(paths.globalConfig, JSON.stringify({ serve: { privateKey: 'global-key' } }));
-    await writeFile(customConfigPath, JSON.stringify({ serve: { privateKey: 'custom-key' } }));
-    await writeFile(projectConfigPath, JSON.stringify({ serve: { privateKey: 'project-key' } }));
+    await writeFile(
+      paths.globalConfig,
+      JSON.stringify({ serve: { relays: ['wss://global.relay'] } })
+    );
+    await writeFile(
+      customConfigPath,
+      JSON.stringify({ serve: { relays: ['wss://custom.relay'] } })
+    );
+    await writeFile(
+      projectConfigPath,
+      JSON.stringify({ serve: { relays: ['wss://project.relay'] } })
+    );
 
     const config = await loadConfig({ serve: { privateKey: 'cli-key' } }, customConfigPath);
     expect(config.serve?.privateKey).toBe('cli-key');
+    expect(config.serve?.relays).toEqual(['wss://custom.relay']);
   });
 
-  it('custom overrides project, project overrides global, global overrides environment', async () => {
+  it('ignores private keys from JSON files and still merges non-secret fields by precedence', async () => {
     process.env.CVMI_SERVE_PRIVATE_KEY = 'env-key';
 
     const { loadConfig, getConfigPaths } = await importLoader();
@@ -96,10 +107,8 @@ describe('Config Precedence', () => {
     );
     await writeFile(projectConfigPath, JSON.stringify({ serve: { privateKey: 'project-key' } }));
 
-    // With no CLI flags, custom should win for privateKey.
     const config = await loadConfig({}, customConfigPath);
-    expect(config.serve?.privateKey).toBe('custom-key');
-    // Custom did specify relays, so it should win for relays.
+    expect(config.serve?.privateKey).toBe('env-key');
     expect(config.serve?.relays).toEqual(['wss://custom.relay']);
   });
 
@@ -121,8 +130,69 @@ describe('Config Precedence', () => {
     );
 
     const config = await loadConfig({}, customConfigPath);
-    expect(config.serve?.privateKey).toBe('custom-key');
-    // custom didn't specify relays, so project relays should remain (project > global).
+    expect(config.serve?.privateKey).toBeUndefined();
     expect(config.serve?.relays).toEqual(['wss://project.relay']);
+  });
+
+  it('uses env private keys for use config while ignoring JSON-stored secrets', async () => {
+    process.env.CVMI_USE_PRIVATE_KEY = 'env-use-key';
+
+    const { loadConfig, getConfigPaths } = await importLoader();
+    const paths = getConfigPaths();
+
+    await mkdir(paths.globalDir, { recursive: true });
+    await writeFile(
+      paths.globalConfig,
+      JSON.stringify({ use: { privateKey: 'global-key', relays: ['wss://global.relay'] } })
+    );
+    await writeFile(
+      projectConfigPath,
+      JSON.stringify({ use: { privateKey: 'project-key', serverPubkey: 'npub1project' } })
+    );
+
+    const config = await loadConfig();
+    expect(config.use?.privateKey).toBe('env-use-key');
+    expect(config.use?.relays).toEqual(['wss://global.relay']);
+    expect(config.use?.serverPubkey).toBe('npub1project');
+  });
+
+  it('keeps call private key separate from use env configuration', async () => {
+    process.env.CVMI_USE_PRIVATE_KEY = 'use-key';
+    process.env.CVMI_CALL_PRIVATE_KEY = 'call-key';
+
+    const { loadCallPrivateKeyFromEnv } = await importLoader();
+
+    expect(loadCallPrivateKeyFromEnv()).toBe('call-key');
+  });
+
+  it('merges server aliases with project overriding global', async () => {
+    const { loadConfig, getConfigPaths } = await importLoader();
+    const paths = getConfigPaths();
+
+    await mkdir(paths.globalDir, { recursive: true });
+    await writeFile(
+      paths.globalConfig,
+      JSON.stringify({
+        servers: {
+          weather: { pubkey: 'npub1global', relays: ['wss://global.relay'] },
+          globalonly: { pubkey: 'npub1globalonly' },
+        },
+      })
+    );
+    await writeFile(
+      projectConfigPath,
+      JSON.stringify({
+        servers: {
+          weather: { pubkey: 'npub1project', relays: ['wss://project.relay'] },
+          projectonly: { pubkey: 'npub1projectonly' },
+        },
+      })
+    );
+
+    const config = await loadConfig();
+    expect(config.servers?.weather?.pubkey).toBe('npub1project');
+    expect(config.servers?.weather?.relays).toEqual(['wss://project.relay']);
+    expect(config.servers?.globalonly?.pubkey).toBe('npub1globalonly');
+    expect(config.servers?.projectonly?.pubkey).toBe('npub1projectonly');
   });
 });

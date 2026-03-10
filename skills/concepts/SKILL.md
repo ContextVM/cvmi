@@ -19,15 +19,16 @@ Rather than relying on centralized infrastructure like domains, OAuth, or cloud 
 
 Running MCP over Nostr eliminates traditional infrastructure barriers:
 
-| Traditional Requirement | Nostr Solution |
-|------------------------|----------------|
-| Domain name + DNS | Not needed |
-| Static IP address | Not needed |
-| OAuth/API keys | Built-in public key cryptography |
-| Public hosting | Any device with internet |
-| Port forwarding | Outbound-only relay connections |
+| Traditional Requirement | Nostr Solution                   |
+| ----------------------- | -------------------------------- |
+| Domain name + DNS       | Not needed                       |
+| Static IP address       | Not needed                       |
+| OAuth/API keys          | Built-in public key cryptography |
+| Public hosting          | Any device with internet         |
+| Port forwarding         | Outbound-only relay connections  |
 
 Nostr provides:
+
 - **Identity** via public/private key cryptography
 - **Discovery** through service announcements on relays
 - **Transport** via signed and encrypted events
@@ -58,13 +59,13 @@ ContextVM presents a unique dual API that lets you write your server once and ma
 
 ## Public vs Private Servers
 
-| Feature | Public Server | Private Server |
-|---------|---------------|----------------|
-| **Announcements** | Published to relays | Not published |
-| **Discovery** | Via relay queries | Known public key only |
-| **Access Control** | Open or whitelisted | Whitelisted |
-| **Encryption** | E2E encrypted | E2E encrypted |
-| **Payments** | Optional | Optional |
+| Feature            | Public Server       | Private Server        |
+| ------------------ | ------------------- | --------------------- |
+| **Announcements**  | Published to relays | Not published         |
+| **Discovery**      | Via relay queries   | Known public key only |
+| **Access Control** | Open or whitelisted | Whitelisted           |
+| **Encryption**     | E2E encrypted       | E2E encrypted         |
+| **Payments**       | Optional            | Optional              |
 
 **Use Private Servers For**: Personal tools, team infrastructure, sensitive operations, development/testing.
 
@@ -77,6 +78,7 @@ Communication flows through three actors:
 3. **Server**: Service using ContextVM Gateway or SDK
 
 **Flow**:
+
 1. Server optionally publishes announcement to relays
 2. Client discovers service (public) or uses known pubkey (private)
 3. Client sends encrypted request via relays
@@ -86,17 +88,17 @@ All messages are signed and end-to-end encrypted (NIP-44).
 
 ## ContextVM vs Traditional Remote MCP
 
-| Requirement | Traditional MCP (HTTP/SSE) | ContextVM |
-|-------------|---------------------------|-----------|
-| Domain name | Required | Not needed |
-| DNS configuration | Required | Not needed |
-| Static IP | Required | Not needed |
-| Port forwarding | Required | Not needed |
-| TLS certificate | Required | Implicit via encryption |
-| Authentication | OAuth/API keys | Built-in pubkey crypto |
-| Hosting | Cloud VM/VPS | Any device |
-| Discovery | Centralized directories | Decentralized relays |
-| Censorship resistance | Low | High |
+| Requirement           | Traditional MCP (HTTP/SSE) | ContextVM               |
+| --------------------- | -------------------------- | ----------------------- |
+| Domain name           | Required                   | Not needed              |
+| DNS configuration     | Required                   | Not needed              |
+| Static IP             | Required                   | Not needed              |
+| Port forwarding       | Required                   | Not needed              |
+| TLS certificate       | Required                   | Implicit via encryption |
+| Authentication        | OAuth/API keys             | Built-in pubkey crypto  |
+| Hosting               | Cloud VM/VPS               | Any device              |
+| Discovery             | Centralized directories    | Decentralized relays    |
+| Censorship resistance | Low                        | High                    |
 
 ## Authentication
 
@@ -134,6 +136,7 @@ MCP is a protocol for invoking remote functions—any computational task, not ju
 ## Getting Started
 
 ### Deploy a Server (Gateway)
+
 ```bash
 gateway-cli --private-key "your-key" \
   --relays "wss://relay.nostr.org" \
@@ -142,6 +145,7 @@ gateway-cli --private-key "your-key" \
 ```
 
 ### Connect a Client (Proxy)
+
 ```bash
 proxy-cli --private-key "your-key" \
   --relays "wss://relay.nostr.org" \
@@ -149,6 +153,7 @@ proxy-cli --private-key "your-key" \
 ```
 
 ### Build Native (SDK)
+
 Use `@contextvm/sdk` for TypeScript applications with `NostrServerTransport` and `NostrClientTransport`.
 
 ## References

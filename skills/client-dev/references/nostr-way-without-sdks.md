@@ -7,6 +7,7 @@ Implement ContextVM clients using raw Nostr primitives—without relying on the 
 Calling a ContextVM server follows the same pattern as other Nostr-based RPC (like DVMs): publish a signed request event, then listen for a response that correlates back to your request.
 
 Relays act as a permissionless message bus providing:
+
 - **Identity** via pubkeys
 - **Authenticity** via signatures
 - **Delivery** via relays
@@ -87,7 +88,7 @@ FUNCTION send_request(server_pubkey, method, params):
         method: method,
         params: params
     }
-    
+
     // Create unsigned Nostr event
     event = {
         kind: 25910,
@@ -95,27 +96,27 @@ FUNCTION send_request(server_pubkey, method, params):
         tags: [["p", server_pubkey]],
         content: serialize_to_json(request_payload)
     }
-    
+
     // Sign with client private key
     signed_event = sign_nostr_event(event, client_private_key)
-    
+
     // Publish to all configured relays
     FOR each relay IN relay_connections:
         relay.publish(signed_event)
-    
+
     RETURN signed_event.id  // For correlation
 
 FUNCTION handle_response(event):
     IF event.kind != 25910:
         RETURN  // Ignore non-CVM events
-    
+
     // Verify response is from expected server
     IF event.pubkey != expected_server_pubkey:
         RETURN
-    
+
     // Parse JSON-RPC content
     response = parse_json(event.content)
-    
+
     IF response.result EXISTS:
         handle_success(response.id, response.result)
     ELSE IF response.error EXISTS:
@@ -148,10 +149,10 @@ Try encrypted communication first, degrade to unencrypted if server doesn't resp
 FUNCTION send_with_optional_encryption(server_pubkey, inner_event):
     // Try encrypted first
     encrypted_sent = send_encrypted(server_pubkey, inner_event)
-    
+
     // Set timeout and wait for response
     response = wait_for_response(timeout_ms=5000)
-    
+
     IF response RECEIVED:
         RETURN response
     ELSE:
@@ -169,18 +170,18 @@ When encryption is enabled, messages use NIP-44 encryption wrapped in NIP-59 gif
 FUNCTION send_encrypted(server_pubkey, inner_event):
     // 1. Serialize the inner event (kind 25910)
     plaintext = serialize_to_json(inner_event)
-    
+
     // 2. Encrypt using NIP-44
     conversation_key = compute_conversation_key(
-        client_private_key, 
+        client_private_key,
         server_pubkey
     )
     ciphertext = nip44_encrypt(plaintext, conversation_key)
-    
+
     // 3. Create gift wrap (kind 1059)
     // Use random keys to hide sender identity
     random_keypair = generate_random_keypair()
-    
+
     gift_wrap = {
         kind: 1059,
         pubkey: random_keypair.public_key,
@@ -188,10 +189,10 @@ FUNCTION send_encrypted(server_pubkey, inner_event):
         tags: [["p", server_pubkey]],
         content: ciphertext
     }
-    
+
     // 4. Sign with random key
     signed_wrap = sign_nostr_event(gift_wrap, random_keypair.private_key)
-    
+
     // 5. Publish gift wrap
     FOR each relay IN relay_connections:
         relay.publish(signed_wrap)
@@ -204,18 +205,18 @@ FUNCTION handle_incoming_event(event):
     IF event.kind == 1059:
         // Gift wrap - decrypt to reveal inner event
         ciphertext = event.content
-        
+
         // Try to decrypt with our private key
         conversation_key = compute_conversation_key(
             client_private_key,
             event.tags["p"]  // Recipient is us
         )
-        
+
         plaintext = nip44_decrypt(ciphertext, conversation_key)
         IF plaintext IS valid:
             inner_event = parse_json(plaintext)
             process_inner_event(inner_event)
-    
+
     ELSE IF event.kind == 25910:
         // Unencrypted - process directly
         process_inner_event(event)
@@ -232,25 +233,27 @@ FUNCTION handle_incoming_event(event):
 
 Both are "RPC over Nostr" with different organizing principles:
 
-| Aspect | DVM (NIP-90) | CVM |
-|--------|--------------|-----|
-| **Job identification** | Kind number (5000-5999) | Tool name |
-| **Response kind** | 6000-6999 (kind + 1000) | Same kind 25910 |
-| **Payload** | Provider-specific in `content` | JSON-RPC message |
-| **Contract discovery** | External docs/conventions | `tools/list` introspection |
-| **Schema validation** | Ad hoc | JSON Schema |
-| **Correlation** | Event ID via tags | Event ID via `e` tag |
-| **Encryption convention** | Provider-specific | Standardized CEP-4 |
+| Aspect                    | DVM (NIP-90)                   | CVM                        |
+| ------------------------- | ------------------------------ | -------------------------- |
+| **Job identification**    | Kind number (5000-5999)        | Tool name                  |
+| **Response kind**         | 6000-6999 (kind + 1000)        | Same kind 25910            |
+| **Payload**               | Provider-specific in `content` | JSON-RPC message           |
+| **Contract discovery**    | External docs/conventions      | `tools/list` introspection |
+| **Schema validation**     | Ad hoc                         | JSON Schema                |
+| **Correlation**           | Event ID via tags              | Event ID via `e` tag       |
+| **Encryption convention** | Provider-specific              | Standardized CEP-4         |
 
 ## When to Use
 
 ### Use Raw Nostr When:
+
 - Building in a language without SDK support
 - You need minimal dependencies
 - Learning or debugging the protocol
 - Implementing a custom client
 
 ### Use the SDK When:
+
 - Building TypeScript/JavaScript applications
 - You want type safety and error handling
 - You need automatic encryption negotiation
@@ -259,13 +262,16 @@ Both are "RPC over Nostr" with different organizing principles:
 ## References
 
 ### ContextVM Documentation
+
 - [`../overview/references/ceps.md`](../overview/references/ceps.md) — CEP-4 encryption specification
 - [`../overview/references/protocol-spec.md`](../overview/references/protocol-spec.md) — Full protocol specification
 
 ### MCP (Model Context Protocol)
+
 - [MCP Specification](https://spec.modelcontextprotocol.io/) — Complete JSON-RPC schema definitions
 - [MCP Documentation](https://modelcontextprotocol.io/) — Protocol overview and guides
 
 ### Nostr NIPs
+
 - [NIP-44](https://github.com/nostr-protocol/nips/blob/master/44.md) — Encryption algorithm (ChaCha20-Poly1305)
 - [NIP-59](https://github.com/nostr-protocol/nips/blob/master/59.md) — Gift wrap specification

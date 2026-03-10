@@ -20,6 +20,8 @@ import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { track } from './telemetry.ts';
 import { serve, showServeHelp } from './serve.ts';
 import { showUseHelp, use } from './use.ts';
+import { call, parseCallArgs, showCallHelp } from './call.ts';
+import { discover, parseDiscoverArgs, showDiscoverHelp } from './discover.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { parseEncryptionMode } from './config/loader.ts';
 import type { EncryptionMode } from '@contextvm/sdk';
@@ -59,6 +61,8 @@ function showBanner(): void {
     ['npx cvmi add [options]', 'Install ContextVM skills'],
     ['npx cvmi serve [options] -- <cmd>', 'Expose MCP server over Nostr'],
     ['npx cvmi use <pubkey>', 'Connect to Nostr MCP server'],
+    ['npx cvmi discover', 'Discover announced servers on relays'],
+    ['npx cvmi call <server>', 'Call a remote ContextVM capability'],
     ['npx cvmi check', 'Check for updates'],
     ['npx cvmi update', 'Update all skills'],
   ];
@@ -88,6 +92,8 @@ ${BOLD}Commands:${RESET}
   sync              Sync skills from node_modules
   serve             Expose an MCP server over Nostr
   use               Connect to a remote Nostr MCP server
+  discover          Discover announced ContextVM servers on relays
+  call              Call a remote ContextVM capability
   check             Check for available skill updates
   update            Update all skills to latest versions
 
@@ -143,6 +149,27 @@ ${BOLD}Use Options:${RESET}
   --encryption-mode      Encryption mode: optional, required, disabled
   --verbose              Enable verbose logging
 
+${BOLD}Call Usage:${RESET}
+  cvmi call <server> [capability] [key=value ...]
+
+${BOLD}Discover Usage:${RESET}
+  cvmi discover [options]
+
+${BOLD}Call Options:${RESET}
+  --config <path>        Path to custom config JSON file (overrides global config)
+  --private-key <key>    Nostr private key (hex format, auto-generated if not provided)
+  ${DIM}env:${RESET} CVMI_CALL_PRIVATE_KEY
+  --relays <urls>        Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
+  --encryption-mode      Encryption mode: optional, required, disabled
+  --raw                  Print raw JSON result
+  --verbose              Enable verbose logging
+
+${BOLD}Discover Options:${RESET}
+  --relays <urls>        Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
+  --limit <n>            Limit the number of returned servers
+  --raw                  Print raw JSON result
+  --verbose              Enable verbose logging
+
 ${BOLD}Options:${RESET}
   --help, -h        Show this help message
   --version, -v     Show version number
@@ -153,6 +180,9 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi add contextvm/cvmi -g        ${DIM}# install from repo, global${RESET}
   ${DIM}$${RESET} cvmi serve -- npx -y @modelcontextprotocol/server-filesystem /tmp ${DIM}# start gateway${RESET}
   ${DIM}$${RESET} cvmi use <server-pubkey>          ${DIM}# connect to remote MCP server${RESET}
+  ${DIM}$${RESET} cvmi discover                      ${DIM}# find public ContextVM servers${RESET}
+  ${DIM}$${RESET} cvmi call <server>                ${DIM}# list remote capabilities${RESET}
+  ${DIM}$${RESET} cvmi call <server> <tool> x=1     ${DIM}# invoke a remote tool${RESET}
   ${DIM}$${RESET} cvmi list
   ${DIM}$${RESET} cvmi list -g
   ${DIM}$${RESET} cvmi check
@@ -179,6 +209,202 @@ ${BOLD}Examples:${RESET}
 
 ${BOLD}Aliases:${RESET} rm, r
   `);
+}
+
+interface ConfigServerOptions {
+  relays?: string[];
+  encryption?: EncryptionMode;
+  description?: string;
+  isStateless?: boolean;
+  global: boolean;
+  config?: string;
+  unknownFlags: string[];
+}
+
+function parseConfigServerOptions(args: string[]): ConfigServerOptions {
+  const result: ConfigServerOptions = {
+    global: false,
+    unknownFlags: [],
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? '';
+
+    const consumeValue = (flagName: string): string | undefined => {
+      const nextIndex = ++i;
+      const value = args[nextIndex];
+      if (value === undefined || value.startsWith('--')) {
+        result.unknownFlags.push(`${flagName} (missing value)`);
+        if (value?.startsWith('--')) i--;
+        return undefined;
+      }
+      return value;
+    };
+
+    if (arg === '--global') {
+      result.global = true;
+    } else if (arg === '--relays') {
+      const value = consumeValue('--relays');
+      result.relays = value ? value.split(',').map((relay) => relay.trim()) : undefined;
+    } else if (arg === '--encryption-mode') {
+      const value = consumeValue('--encryption-mode');
+      result.encryption = parseEncryptionMode(value, 'CLI flag --encryption-mode');
+    } else if (arg === '--description') {
+      result.description = consumeValue('--description');
+    } else if (arg === '--config') {
+      result.config = consumeValue('--config');
+    } else if (arg === '--stateless') {
+      result.isStateless = true;
+    } else if (arg === '--stateful') {
+      result.isStateless = false;
+    } else {
+      result.unknownFlags.push(arg);
+    }
+  }
+
+  return result;
+}
+
+function showConfigHelp(): void {
+  console.log(`
+${BOLD}Usage:${RESET} cvmi config <command> [...args] [options]
+       ${RESET} cvmi config server <command> [...args] [options]
+
+${BOLD}Commands:${RESET}
+  add <alias> <pubkey>             Save a server alias
+  remove <alias>                   Remove a server alias
+  list                             List configured server aliases
+
+${BOLD}Legacy / explicit form:${RESET}
+  server add <alias> <pubkey>      Save a server alias
+  server remove <alias>            Remove a server alias
+  server list                      List configured server aliases
+
+${BOLD}Options:${RESET}
+  --global                         Write to global config instead of project config
+  --config <path>                  Use a custom config file for reads
+  --relays <urls>                  Comma-separated relay URLs
+  --encryption-mode <mode>         Encryption mode: optional, required, disabled
+  --description <text>             Optional alias description
+  --stateless                      Enable stateless transport mode
+  --stateful                       Disable stateless transport mode
+  --help, -h                       Show this help message
+
+${BOLD}Notes:${RESET}
+  Alias writes default to project scope.
+  Pass --global to write to ${DIM}~/.cvmi/config.json${RESET} instead.
+  `);
+}
+
+async function runConfigCommand(args: string[]): Promise<void> {
+  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+    showConfigHelp();
+    return;
+  }
+
+  const serverActions = new Set(['add', 'remove', 'list']);
+  const [first, second, ...remaining] = args;
+
+  let action: string | undefined;
+  let rest: string[] = [];
+
+  if (first === 'server') {
+    action = second;
+    rest = remaining;
+  } else if (first && serverActions.has(first)) {
+    action = first;
+    rest = [second, ...remaining].filter((value): value is string => value !== undefined);
+  } else {
+    throw new Error(
+      `Unknown config command: ${first}. Expected one of: add, remove, list, or server <command>.`
+    );
+  }
+
+  const { listServerAliases, removeServerAlias, upsertServerAlias } =
+    await import('./config/loader.ts');
+  if (action === 'add') {
+    const [alias, pubkey, ...optionArgs] = rest;
+    if (!alias || !pubkey) {
+      showConfigHelp();
+      process.exit(1);
+    }
+
+    const options = parseConfigServerOptions(optionArgs);
+    if (options.unknownFlags.length > 0) {
+      throw new Error(`Unknown flag(s): ${options.unknownFlags.join(', ')}`);
+    }
+
+    const configPath = await upsertServerAlias(
+      alias,
+      {
+        pubkey,
+        ...(options.relays ? { relays: options.relays } : {}),
+        ...(options.encryption ? { encryption: options.encryption } : {}),
+        ...(options.description ? { description: options.description } : {}),
+        ...(options.isStateless !== undefined ? { isStateless: options.isStateless } : {}),
+      },
+      options.global ? 'global' : 'project',
+      options.config
+    );
+
+    console.log(`Saved server alias '${alias}' to ${configPath}`);
+    return;
+  }
+
+  if (action === 'remove') {
+    const [alias, ...optionArgs] = rest;
+    if (!alias) {
+      showConfigHelp();
+      process.exit(1);
+    }
+
+    const options = parseConfigServerOptions(optionArgs);
+    if (options.unknownFlags.length > 0) {
+      throw new Error(`Unknown flag(s): ${options.unknownFlags.join(', ')}`);
+    }
+
+    const removed = await removeServerAlias(
+      alias,
+      options.global ? 'global' : 'project',
+      options.config
+    );
+
+    if (!removed.removed) {
+      throw new Error(
+        `Server alias not found in ${options.global ? 'global' : 'project'} scope: ${alias}`
+      );
+    }
+
+    console.log(`Removed server alias '${alias}' from ${removed.configPath}`);
+    return;
+  }
+
+  if (action === 'list') {
+    const options = parseConfigServerOptions(rest);
+    if (options.unknownFlags.length > 0) {
+      throw new Error(`Unknown flag(s): ${options.unknownFlags.join(', ')}`);
+    }
+
+    const aliases = await listServerAliases(options.global ? 'global' : 'merged', options.config);
+    if (aliases.length === 0) {
+      console.log('No server aliases configured.');
+      return;
+    }
+
+    for (const alias of aliases) {
+      console.log(`${alias.name} (${alias.scope}) -> ${alias.pubkey}`);
+      if (alias.description) console.log(`  description: ${alias.description}`);
+      if (alias.relays?.length) console.log(`  relays: ${alias.relays.join(', ')}`);
+      if (alias.encryption) console.log(`  encryption: ${String(alias.encryption).toLowerCase()}`);
+      if (alias.isStateless !== undefined) console.log(`  stateless: ${alias.isStateless}`);
+      console.log(`  config: ${alias.configPath}`);
+    }
+    return;
+  }
+
+  throw new Error(
+    `Unknown config command: ${action}. Expected one of: add, remove, list, or server <command>.`
+  );
 }
 
 // ============================================
@@ -727,6 +953,7 @@ function parseUseArgs(args: string[]): UseParseResult {
 export const __test__ = {
   parseServeArgs,
   parseUseArgs,
+  parseCallArgs,
 };
 
 // ============================================
@@ -846,6 +1073,60 @@ async function main(): Promise<void> {
       });
       break;
     }
+    case 'discover': {
+      const parsed = parseDiscoverArgs(restArgs);
+
+      if (parsed.unknownFlags.length > 0) {
+        console.error(`Unknown flag(s): ${parsed.unknownFlags.join(', ')}`);
+        console.error(`Run 'cvmi discover --help' for usage.`);
+        process.exit(1);
+      }
+
+      if (parsed.help) {
+        showDiscoverHelp();
+        break;
+      }
+
+      await discover({
+        relays: parsed.relays,
+        raw: parsed.raw,
+        verbose: parsed.verbose,
+        limit: parsed.limit,
+      });
+      break;
+    }
+    case 'call': {
+      const parsed = parseCallArgs(restArgs);
+
+      if (parsed.unknownFlags.length > 0) {
+        console.error(`Unknown flag(s): ${parsed.unknownFlags.join(', ')}`);
+        console.error(`Run 'cvmi call --help' for usage.`);
+        process.exit(1);
+      }
+
+      if (!parsed.server && parsed.help) {
+        showCallHelp();
+        break;
+      }
+
+      await call(parsed.server, parsed.capability, parsed.input, {
+        debug: parsed.debug,
+        verbose: parsed.verbose,
+        raw: parsed.raw,
+        help: parsed.help,
+        privateKey: parsed.privateKey,
+        relays: parsed.relays,
+        encryption: parsed.encryption,
+        isStateless: parsed.isStateless,
+        config: parsed.config,
+      });
+      process.exit(0);
+      break;
+    }
+    case 'config': {
+      await runConfigCommand(restArgs);
+      break;
+    }
     case '--help':
     case '-h':
       showHelp();
@@ -864,6 +1145,7 @@ async function main(): Promise<void> {
 main().catch((err) => {
   // Ensure commands fail with a non-zero exit code (useful for scripting).
   // Note: This does not change SIGINT/SIGTERM behavior for long-running commands.
-  console.error(err);
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(`Error: ${message}`);
   process.exit(1);
 });

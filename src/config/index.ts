@@ -5,9 +5,13 @@
 export {
   loadConfig,
   loadConfigFromEnv,
+  loadCallPrivateKeyFromEnv,
   getConfigPaths,
   getServeConfig,
   getUseConfig,
+  listServerAliases,
+  upsertServerAlias,
+  removeServerAlias,
   DEFAULT_RELAYS,
   DEFAULT_ENCRYPTION,
 } from './loader.ts';
@@ -17,6 +21,9 @@ export type {
   ServeJsonConfig,
   UseConfig,
   UseJsonConfig,
+  ServerTargetConfig,
   CvmiConfig,
   ConfigPaths,
 } from './types.ts';
+
+export type { ConfigScope, ResolvedServerTargetConfig } from './loader.ts';

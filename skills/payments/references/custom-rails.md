@@ -20,7 +20,7 @@ export class MyRailPaymentProcessor implements PaymentProcessor {
   public readonly pmi = 'my-rail-v1';
 
   public async createPaymentRequired(
-    params: PaymentProcessorCreateParams,
+    params: PaymentProcessorCreateParams
   ): Promise<{ amount: number; pay_req: string; description?: string; pmi: string }> {
     return {
       amount: params.amount,
@@ -31,7 +31,7 @@ export class MyRailPaymentProcessor implements PaymentProcessor {
   }
 
   public async verifyPayment(
-    _params: PaymentProcessorVerifyParams,
+    _params: PaymentProcessorVerifyParams
   ): Promise<{ _meta?: Record<string, unknown> }> {
     return { _meta: { verifiedAt: Date.now() } };
   }
@@ -80,4 +80,3 @@ withClientPayments(baseTransport, {
   handlers: [new MyRailPaymentHandler()],
 });
 ```
-

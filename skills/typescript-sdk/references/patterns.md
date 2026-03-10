@@ -5,16 +5,13 @@
 ### Graceful Shutdown
 
 ```typescript
-async function gracefulShutdown(
-  client: Client,
-  relayPool: RelayHandler,
-): Promise<void> {
+async function gracefulShutdown(client: Client, relayPool: RelayHandler): Promise<void> {
   await client.close();
   await relayPool.disconnect();
 }
 
-process.on("SIGINT", () => gracefulShutdown(client, relayPool));
-process.on("SIGTERM", () => gracefulShutdown(client, relayPool));
+process.on('SIGINT', () => gracefulShutdown(client, relayPool));
+process.on('SIGTERM', () => gracefulShutdown(client, relayPool));
 ```
 
 ### Connection Health Check
@@ -24,9 +21,7 @@ async function isConnectionHealthy(client: Client): Promise<boolean> {
   try {
     await Promise.race([
       client.ping(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 5000),
-      ),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
     ]);
     return true;
   } catch {

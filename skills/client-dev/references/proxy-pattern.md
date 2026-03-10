@@ -18,8 +18,8 @@ MCP Client (stdio) <---> NostrMCPProxy <---> ContextVM Server (Nostr)
 ## Example: Claude Desktop Integration
 
 ```typescript
-import { NostrMCPProxy } from "@contextvm/sdk";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { NostrMCPProxy } from '@contextvm/sdk';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 async function main() {
   const proxy = new NostrMCPProxy({
@@ -30,14 +30,14 @@ async function main() {
     nostrTransportOptions: {
       signer: new PrivateKeySigner(clientKey),
       relayHandler: new ApplesauceRelayPool(relays),
-      serverPubkey: "remote-server-pubkey",
+      serverPubkey: 'remote-server-pubkey',
     },
   });
 
   await proxy.start();
 
   // Proxy runs until interrupted
-  process.on("SIGINT", async () => {
+  process.on('SIGINT', async () => {
     await proxy.stop();
     process.exit(0);
   });

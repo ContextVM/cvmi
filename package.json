@@ -1,6 +1,6 @@
 {
   "name": "cvmi",
-  "version": "0.1.11",
+  "version": "0.2.2",
   "description": "ContextVM Interface",
   "type": "module",
   "bin": {
@@ -17,8 +17,8 @@
     "dev": "node src/cli.ts",
     "exec:test": "node scripts/execute-tests.ts",
     "prepublishOnly": "npm run build",
-    "format": "prettier --write 'src/**/*.ts' 'scripts/**/*.ts'",
-    "format:check": "prettier --check 'src/**/*.ts' 'scripts/**/*.ts'",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "prepare": "husky",
     "test": "vitest src",
     "type-check": "tsc --noEmit",
@@ -26,9 +26,14 @@
     "publish:snapshot": "npm version prerelease --preid=snapshot --no-git-tag-version && npm publish --tag snapshot"
   },
   "lint-staged": {
+    "*.{md,json,yml,yaml}": "prettier --write",
     "src/**/*.ts": "prettier --write",
     "scripts/**/*.ts": "prettier --write",
-    "tests/**/*.ts": "prettier --write"
+    "tests/**/*.ts": "prettier --write",
+    "docs/**/*.md": "prettier --write",
+    "skills/**/*.md": "prettier --write",
+    "skills/**/*.ts": "prettier --write",
+    ".github/**/*.{yml,yaml}": "prettier --write"
   },
   "keywords": [
     "cli",
@@ -78,33 +83,33 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vercel-labs/skills.git"
+    "url": "git+https://github.com/ContextVM/cvmi"
   },
-  "homepage": "https://github.com/vercel-labs/skills#readme",
+  "homepage": "https://github.com/ContextVM/cvmi#readme",
   "bugs": {
-    "url": "https://github.com/vercel-labs/skills/issues"
+    "url": "https://github.com/ContextVM/cvmi/issues"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@contextvm/sdk": "^0.3.2",
-    "@modelcontextprotocol/sdk": "^1.25.3",
-    "nostr-tools": "^2.23.0",
+    "@contextvm/sdk": "^0.7.2",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "nostr-tools": "^2.23.3",
     "xdg-basedir": "^5.1.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.8",
+    "@changesets/cli": "^2.30.0",
     "@clack/prompts": "^0.11.0",
     "@types/bun": "latest",
-    "@types/node": "^22.19.8",
+    "@types/node": "^22.19.15",
     "gray-matter": "^4.0.3",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
-    "obuild": "^0.4.22",
+    "lint-staged": "^16.3.3",
+    "obuild": "^0.4.32",
     "picocolors": "^1.1.1",
     "prettier": "^3.8.1",
-    "simple-git": "^3.30.0",
+    "simple-git": "^3.32.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

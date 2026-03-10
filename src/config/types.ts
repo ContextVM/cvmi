@@ -9,7 +9,7 @@ import type { ServerInfo, EncryptionMode } from '@contextvm/sdk';
  * Maps to NostrServerTransportOptions but with simpler primitive types.
  */
 export interface ServeConfig {
-  /** Private key in hex format (auto-generated if not provided) */
+  /** Private key resolved from CLI or environment (never from JSON config files) */
   privateKey: string;
   /** Relay URLs (defaults to wss://relay.contextvm.org and wss://cvm.otherstuff.ai) */
   relays: string[];
@@ -33,7 +33,7 @@ export interface ServeConfig {
 
 /**
  * Configuration for serve command stored in JSON files.
- * Private keys should be stored in .env file as CVMI_SERVE_PRIVATE_KEY.
+ * Private keys are excluded because JSON config files must not store them.
  */
 export type ServeJsonConfig = Omit<ServeConfig, 'privateKey'>;
 
@@ -42,21 +42,39 @@ export type ServeJsonConfig = Omit<ServeConfig, 'privateKey'>;
  * Maps to NostrTransportOptions but with simpler primitive types.
  */
 export interface UseConfig {
-  /** Private key in hex format (auto-generated if not provided) */
+  /** Private key resolved from CLI or environment (never from JSON config files) */
   privateKey: string;
   /** Relay URLs (defaults to wss://relay.contextvm.org and wss://cvm.otherstuff.ai) */
   relays: string[];
-  /** Server's public key to connect to */
+  /** Server identity to connect to (hex, npub, or nprofile) */
   serverPubkey?: string;
   /** Encryption mode for communications */
   encryption?: EncryptionMode;
+  /** Whether to use stateless transport mode */
+  isStateless?: boolean;
 }
 
 /**
  * Configuration for use command stored in JSON files.
- * Private keys should be stored in .env file as CVMI_USE_PRIVATE_KEY.
+ * Private keys are excluded because JSON config files must not store them.
  */
 export type UseJsonConfig = Omit<UseConfig, 'privateKey'>;
+
+/**
+ * Named remote server entry used by direct client commands.
+ */
+export interface ServerTargetConfig {
+  /** Remote server identity stored in aliases, typically hex, npub, or nprofile */
+  pubkey: string;
+  /** Relay URLs to use for this server */
+  relays?: string[];
+  /** Encryption mode for communications */
+  encryption?: EncryptionMode;
+  /** Whether to use stateless transport mode */
+  isStateless?: boolean;
+  /** Optional display description */
+  description?: string;
+}
 
 /**
  * Full cvmi configuration stored in JSON config files.
@@ -64,9 +82,11 @@ export type UseJsonConfig = Omit<UseConfig, 'privateKey'>;
  */
 export interface CvmiConfig {
   /** Gateway/serve configuration */
-  serve?: Partial<ServeJsonConfig>;
+  serve?: Partial<ServeConfig>;
   /** Proxy/use configuration */
-  use?: Partial<UseJsonConfig>;
+  use?: Partial<UseConfig>;
+  /** Named server aliases for direct calls */
+  servers?: Record<string, ServerTargetConfig>;
 }
 
 /**

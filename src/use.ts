@@ -117,22 +117,22 @@ ${BOLD}Description:${RESET}
   This allows you to use remote MCP servers as if they were local.
 
 ${BOLD}Arguments:${RESET}
-  <server-pubkey>         The Nostr public key (npub1 or hex) of the remote MCP server
-                          Can also be specified in config file under use.serverPubkey
+  <server-pubkey>         The server identity (hex, npub, or nprofile) of the remote MCP server
+                           Can also be specified in config file under use.serverPubkey
 
 ${BOLD}Options:${RESET}
   --config <path>         Path to custom config JSON file
-  --private-key <key>     Your Nostr private key (hex/nsec format, auto-generated if not provided)
+  --private-key <key>     Your Nostr private key (hex/nsec format, overrides env, auto-generated if not provided)
   --persist-private-key   Save private key to .env file for future use
   --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
   --encryption-mode       Encryption mode: optional, required, disabled (default: optional)
   --verbose               Enable verbose logging
   --help, -h              Show this help message
 
-${BOLD}Configuration Sources (priority: CLI > custom config (--config) > project .cvmi.json > global ~/.cvmi/config.json > env vars):${RESET}
+  ${BOLD}Configuration Sources (priority: CLI > custom config (--config) > project .cvmi.json > global ~/.cvmi/config.json > env vars):${RESET}
   Environment variables:
-    CVMI_USE_PRIVATE_KEY, CVMI_PROXY_PRIVATE_KEY
-    CVMI_USE_RELAYS, CVMI_PROXY_RELAYS
+     CVMI_USE_PRIVATE_KEY, CVMI_PROXY_PRIVATE_KEY
+     CVMI_USE_RELAYS, CVMI_PROXY_RELAYS
     CVMI_USE_SERVER_PUBKEY, CVMI_PROXY_SERVER_PUBKEY
     CVMI_USE_ENCRYPTION, CVMI_PROXY_ENCRYPTION
 
@@ -143,7 +143,7 @@ ${BOLD}SDK Logging (set via environment, not config files):${RESET}
     LOG_ENABLED (true|false)
 
   Config file format (.cvmi.json or custom --config):
-  Note: Private keys are stored in .env file, not JSON config.
+  Note: Private keys are loaded from environment variables or CLI flags, never from JSON config.
   {
     "use": {
       "serverPubkey": "npub1...",
@@ -157,6 +157,7 @@ ${BOLD}SDK Logging (set via environment, not config files):${RESET}
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi use npub1q... ${DIM}# connect to remote server by public key${RESET}
+  ${DIM}$${RESET} cvmi use nprofile1q... ${DIM}# connect using an nprofile with relay hints${RESET}
   ${DIM}$${RESET} cvmi use npub1q... --verbose ${DIM}# verbose logging for debugging${RESET}
   ${DIM}$${RESET} cvmi use npub1q... --relays wss://my-relay.com ${DIM}# use specific relay${RESET}
   ${DIM}$${RESET} cvmi use --help ${DIM}# show this help${RESET}

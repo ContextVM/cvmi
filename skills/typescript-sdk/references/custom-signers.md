@@ -3,7 +3,7 @@
 ## NIP-07 Browser Extension Signer
 
 ```typescript
-import { NostrSigner } from "@contextvm/sdk";
+import { NostrSigner } from '@contextvm/sdk';
 
 declare global {
   interface Window {
@@ -21,7 +21,7 @@ declare global {
 class Nip07Signer implements NostrSigner {
   constructor() {
     if (!window.nostr) {
-      throw new Error("NIP-07 extension not found");
+      throw new Error('NIP-07 extension not found');
     }
   }
 

@@ -8,13 +8,13 @@ This file provides guidance to AI coding agents working on the `cvmi` CLI codeba
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `cvmi` | Show banner with available commands |
-| `cvmi add <pkg>` | Install skills from git repos, URLs, or local paths |
-| `cvmi check` | Check for available skill updates |
-| `cvmi update` | Update all skills to latest versions |
-| `cvmi generate-lock` | Match installed skills to sources via API |
+| Command              | Description                                         |
+| -------------------- | --------------------------------------------------- |
+| `cvmi`               | Show banner with available commands                 |
+| `cvmi add <pkg>`     | Install skills from git repos, URLs, or local paths |
+| `cvmi check`         | Check for available skill updates                   |
+| `cvmi update`        | Update all skills to latest versions                |
+| `cvmi generate-lock` | Match installed skills to sources via API           |
 
 Aliases: `cvmi a`, `cvmi i`, `cvmi install` all work for `add`.
 
@@ -89,12 +89,12 @@ If reading an older lock file version, it's wiped. Users must reinstall skills t
 
 ## Key Integration Points
 
-| Feature | Implementation |
-|---------|---------------|
-| `cvmi add` | `src/add.ts` - full implementation |
-| `cvmi check` | `POST /check-updates` API |
-| `cvmi update` | `POST /check-updates` + reinstall per skill |
-| `cvmi generate-lock` | `POST /api/skills/search` on skills.sh |
+| Feature              | Implementation                              |
+| -------------------- | ------------------------------------------- |
+| `cvmi add`           | `src/add.ts` - full implementation          |
+| `cvmi check`         | `POST /check-updates` API                   |
+| `cvmi update`        | `POST /check-updates` + reinstall per skill |
+| `cvmi generate-lock` | `POST /api/skills/search` on skills.sh      |
 
 ## Development
 

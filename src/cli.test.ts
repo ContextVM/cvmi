@@ -1,13 +1,29 @@
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { readFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
+import { tmpdir } from 'os';
 import { runCliOutput, stripLogo, hasLogo } from './test-utils.ts';
 
 describe('skills CLI', () => {
+  const originalCwd = process.cwd();
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `cvmi-cli-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(testDir, { recursive: true });
+    process.chdir(testDir);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
   describe('--help', () => {
     it('should display help message', () => {
       const output = runCliOutput(['--help']);
       expect(output).toContain('Usage: cvmi <command> [options]');
+      expect(output).toContain('call              Call a remote ContextVM capability');
     });
 
     it('should show same output for -h alias', () => {
@@ -47,6 +63,25 @@ describe('skills CLI', () => {
         Run cvmi --help for usage.
         "
       `);
+    });
+  });
+
+  describe('config command', () => {
+    it('should show config help for invalid config command without stack trace', () => {
+      const output = runCliOutput(['config', 'relatr', 'abc']);
+      expect(output).toContain('Error: Unknown config command: relatr.');
+      expect(output).not.toContain('at runConfigCommand');
+    });
+
+    it('should accept shorthand config add syntax', () => {
+      const output = runCliOutput(['config', 'add']);
+      expect(output).toContain('Usage: cvmi config <command> [...args] [options]');
+      expect(output).not.toContain('Unknown config section: add');
+    });
+
+    it('should accept nprofile server aliases without validation errors', () => {
+      const output = runCliOutput(['config', 'add', 'weather', 'nprofile1example']);
+      expect(output).not.toContain('Invalid public key format');
     });
   });
 

@@ -52,7 +52,7 @@ CMD ["bun", "run", "server.ts"]
 ### Docker Compose
 
 ```yaml
-version: "3.8"
+version: '3.8'
 services:
   cvm-server:
     build: .
@@ -63,10 +63,10 @@ services:
       - ENCRYPTION_MODE=optional
     restart: unless-stopped
     logging:
-      driver: "json-file"
+      driver: 'json-file'
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'
 ```
 
 See [`assets/docker-compose.yml`](assets/docker-compose.yml) for complete example.
@@ -93,9 +93,7 @@ wss://nos.lol
 For sensitive deployments:
 
 ```typescript
-const relayPool = new ApplesauceRelayPool([
-  "wss://private-relay.your-domain.com",
-]);
+const relayPool = new ApplesauceRelayPool(['wss://private-relay.your-domain.com']);
 ```
 
 ## Security Best Practices
@@ -121,10 +119,7 @@ const relayPool = new ApplesauceRelayPool([
 const transport = new NostrServerTransport({
   signer,
   relayHandler: relayPool,
-  allowedPublicKeys: [
-    process.env.CLIENT_1_PUBKEY!,
-    process.env.CLIENT_2_PUBKEY!,
-  ],
+  allowedPublicKeys: [process.env.CLIENT_1_PUBKEY!, process.env.CLIENT_2_PUBKEY!],
 });
 ```
 
@@ -156,16 +151,16 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ### Structured Logging
 
 ```typescript
-import { createLogger } from "@contextvm/sdk/core";
+import { createLogger } from '@contextvm/sdk/core';
 
-const logger = createLogger("server");
+const logger = createLogger('server');
 
 // Production log format
-logger.info("request.completed", {
-  module: "server",
-  method: "tools/call",
-  tool: "echo",
-  clientPubkey: pubkey.slice(0, 8) + "...",
+logger.info('request.completed', {
+  module: 'server',
+  method: 'tools/call',
+  tool: 'echo',
+  clientPubkey: pubkey.slice(0, 8) + '...',
   durationMs: 45,
 });
 ```

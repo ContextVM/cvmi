@@ -24,7 +24,7 @@ new NostrServerTransport({
   isPublicServer: true, // Announce to network
   allowedPublicKeys: [client1, client2],
   excludedCapabilities: [
-    { method: "tools/list" }, // Public: anyone can see tools
+    { method: 'tools/list' }, // Public: anyone can see tools
   ],
 });
 ```
@@ -45,12 +45,12 @@ async (args, extra) => {
   const clientPubkey = extra._meta?.clientPubkey;
   const tier = await getClientTier(clientPubkey);
 
-  if (tier === "premium") {
+  if (tier === 'premium') {
     return premiumResult;
-  } else if (tier === "basic") {
+  } else if (tier === 'basic') {
     return basicResult;
   } else {
-    throw new Error("Unauthorized");
+    throw new Error('Unauthorized');
   }
 };
 ```
@@ -67,7 +67,7 @@ async (args, extra) => {
   const current = usageStore.get(clientPubkey) || 0;
 
   if (current > 100) {
-    throw new Error("Rate limit exceeded");
+    throw new Error('Rate limit exceeded');
   }
 
   usageStore.set(clientPubkey, current + 1);

@@ -1,11 +1,34 @@
 # cvmi
 
+## 0.2.2
+
+### Patch Changes
+
+- feat(call): improve help text for passing array/object arguments
+
+## 0.2.1
+
+### Patch Changes
+
+- feat(cli): add discover command to find public ContextVM servers
+
+  Add new 'cvmi discover' command that queries relays for public ContextVM
+  server announcements (kind 11316). Users can specify relays, limit results,
+  and get raw JSON output.
+
+  Also improves 'cvmi call' with loading spinners and better output formatting.
+
+## 0.2.0
+
+### Minor Changes
+
+- feat(cli): add cvmi call command to invoke remote ContextVM capabilities
+
 ## 0.1.11
 
 ### Patch Changes
 
 - feat: align agent selection UX with upstream skills CLI
-
   - Add interactive search with fuzzy filtering to agent selection
   - Display locked "Universal (.agents/skills)" section with pre-selected universal agents
   - Improve visual separation between universal and agent-specific installations
