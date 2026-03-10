@@ -315,6 +315,12 @@ function printToolHelp(target: ResolvedServerTarget, tool: Tool): void {
   }
   console.log();
   printSection('Input');
+  console.log(
+    `  ${DIM}Pass strings as key=value. Pass arrays/objects as quoted JSON in the value, e.g. 'targets=[\"a\",\"b\"]'.${RESET}`
+  );
+  console.log(
+    `  ${DIM}Quote the full key=value argument to avoid shell expansion in zsh and similar shells.${RESET}`
+  );
   renderToolSchema(tool);
 
   const outputSchema = (tool as Tool & { outputSchema?: Record<string, unknown> }).outputSchema;
@@ -425,7 +431,7 @@ ${BOLD}Description:${RESET}
 ${BOLD}Arguments:${RESET}
   <server>                Server identity (hex, npub, nprofile) or configured alias
   <capability>            Capability selector, currently tool name or tool:<name>
-  key=value               Input arguments for tool calls
+  key=value               Input arguments for tool calls; arrays/objects must be passed as quoted JSON values
 
 ${BOLD}Options:${RESET}
   --config <path>         Path to custom config JSON file
@@ -455,9 +461,11 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi call weather --help
   ${DIM}$${RESET} cvmi config add weather nprofile1example
   ${DIM}$${RESET} cvmi config add weather npub1... --relays wss://relay.example.org
-  ${DIM}$${RESET} cvmi call weather weather.get_current city=Lisbon
+  ${DIM}$${RESET} cvmi call weather get_current city=Lisbon
+  ${DIM}$${RESET} cvmi call relatr calculate_trust_scores 'targetPubkeys=["pubkey1","pubkey2"]'
+  ${DIM}$${RESET} cvmi call relay search 'filters={"kinds":[1],"limit":10}'
   ${DIM}$${RESET} cvmi call weather --debug
-  ${DIM}$${RESET} cvmi call npub1... weather.get_current city=Lisbon --raw
-  ${DIM}$${RESET} cvmi call nprofile1... weather.get_current city=Lisbon
+  ${DIM}$${RESET} cvmi call npub1... get_current city=Lisbon --raw
+  ${DIM}$${RESET} cvmi call nprofile1... get_current city=Lisbon
   `);
 }

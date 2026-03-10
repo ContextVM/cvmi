@@ -1,5 +1,11 @@
 # cvmi
 
+## 0.2.2
+
+### Patch Changes
+
+- feat(call): improve help text for passing array/object arguments
+
 ## 0.2.1
 
 ### Patch Changes

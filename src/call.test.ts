@@ -315,6 +315,8 @@ describe('parseCallArgs', () => {
       '  Description: Search profiles',
       '',
       'Input',
+      '  Pass strings as key=value. Pass arrays/objects as quoted JSON in the value, e.g. \'targets=["a","b"]\'.',
+      '  Quote the full key=value argument to avoid shell expansion in zsh and similar shells.',
       '  - query: string',
       'Output',
       '  - results: object[]',
@@ -342,5 +344,9 @@ describe('parseCallArgs', () => {
     );
     expect(help).toContain('cvmi config add <alias> <pubkey>');
     expect(help).toContain('cvmi call <alias> <tool>');
+    expect(help).toContain('arrays/objects must be passed as quoted JSON values');
+    expect(help).toContain(
+      'cvmi call relatr calculate_trust_scores \'targetPubkeys=["pubkey1","pubkey2"]\''
+    );
   });
 });
