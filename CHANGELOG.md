@@ -1,5 +1,11 @@
 # cvmi
 
+## 0.2.5
+
+### Patch Changes
+
+- refactor(call): improve error handling when tool is not found
+
 ## 0.2.4
 
 ### Patch Changes

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EncryptionMode } from '@contextvm/sdk';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { __test__, parseCallArgs, showCallHelp } from './call.ts';
 import { stripAnsi } from './test-utils.ts';
 
@@ -603,5 +604,58 @@ describe('parseCallArgs', () => {
         'Run `cvmi call relatr <tool> --help` to inspect a specific tool.',
       ].join('\n')
     );
+  });
+
+  it('prints server help when a requested tool is missing during invocation', async () => {
+    const listTools = vi.fn().mockResolvedValue({
+      tools: [
+        {
+          name: 'search',
+          description: 'Search for information',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: { type: 'string' },
+            },
+            required: ['query'],
+          },
+        },
+      ],
+    });
+    const callTool = vi.fn();
+    const close = vi.fn().mockResolvedValue(undefined);
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((code?: string | number | null) => {
+        throw new Error(`EXIT:${code}`);
+      });
+
+    vi.mocked(Client).mockImplementation(
+      () =>
+        ({
+          connect: vi.fn().mockResolvedValue(undefined),
+          listTools,
+          callTool,
+          close,
+        }) as unknown as Client
+    );
+
+    const output = await captureConsoleOutputAsync(async () => {
+      await expect(
+        call(
+          'relatr',
+          'height of the eiffel tower',
+          {},
+          { privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h' }
+        )
+      ).rejects.toThrow('EXIT:1');
+    });
+
+    expect(callTool).not.toHaveBeenCalled();
+    expect(output.join('\n')).toContain('Tool not found: height of the eiffel tower');
+    expect(output.join('\n')).toContain('cvmi call <server> <tool> [key=value ...] [options]');
+    expect(output.join('\n')).toContain('search');
+
+    exitSpy.mockRestore();
   });
 });

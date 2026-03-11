@@ -562,6 +562,24 @@ function buildMissingToolError(
   );
 }
 
+function printMissingToolGuidance(
+  target: ResolvedServerTarget,
+  capabilityArg: string,
+  tools: Tool[],
+  metadata?: ServerMetadata,
+  options: Pick<CallOptions, 'showServerDetails'> = {}
+): void {
+  console.error(
+    buildMissingToolError(
+      target.input,
+      capabilityArg,
+      tools.map((entry) => entry.name)
+    ).message
+  );
+  console.error();
+  printServerHelp(target, tools, metadata, options);
+}
+
 export async function call(
   serverArg: string | undefined,
   capabilityArg: string | undefined,
@@ -608,14 +626,25 @@ export async function call(
       const toolsResult = await remote.client.listTools();
       const tool = toolsResult.tools.find((entry) => entry.name === toolName);
       if (!tool) {
-        throw buildMissingToolError(
-          target.input,
+        printMissingToolGuidance(
+          target,
           capabilityArg,
-          toolsResult.tools.map((entry) => entry.name)
+          toolsResult.tools,
+          remote.metadata,
+          options
         );
+        process.exit(1);
       }
       printToolHelp(target, tool);
       return;
+    }
+
+    logVerbose(options.verbose, 'Discovering tools...');
+    const toolsResult = await remote.client.listTools();
+    const tool = toolsResult.tools.find((entry) => entry.name === toolName);
+    if (!tool) {
+      printMissingToolGuidance(target, capabilityArg, toolsResult.tools, remote.metadata, options);
+      process.exit(1);
     }
 
     logVerbose(options.verbose, `Calling tool: ${toolName}`);
