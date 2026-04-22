@@ -602,7 +602,7 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
     const output = await captureConsoleOutputAsync(async () => {
       await expect(
         call(
-          'relatr',
+          '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
           'height of the eiffel tower',
           {},
           { privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h' }

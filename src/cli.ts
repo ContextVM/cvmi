@@ -24,6 +24,7 @@ import { showUseHelp, use } from './use.ts';
 import { call, parseCallArgs, showCallHelp } from './call.ts';
 import { discover, parseDiscoverArgs, showDiscoverHelp } from './discover.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
+import { runCn } from './cn/index.ts';
 import { parseEncryptionMode } from './config/loader.ts';
 import { BOLD, DIM, GRAYS, LOGO_LINES, RESET, TEXT } from './constants/ui.ts';
 
@@ -68,6 +69,7 @@ function showBanner(): void {
     ['npx cvmi config <command>', 'Manage saved server aliases'],
     ['npx cvmi discover', 'Discover announced servers on relays'],
     ['npx cvmi call <server>', 'Call a remote ContextVM capability'],
+    ['npx cvmi cn <cmd>', 'Compile a server to TypeScript code'],
     ['npx cvmi check', 'Check for updates'],
     ['npx cvmi update', 'Update all skills'],
   ];
@@ -97,6 +99,7 @@ ${BOLD}Commands:${RESET}
   config                 Manage saved server aliases
   discover               Discover announced ContextVM servers on relays
   call                   Inspect or call a remote ContextVM capability
+  cn, compile            Compile a server to TypeScript code
   check                  Check for available skill updates
   update                 Update all skills to latest versions
 
@@ -122,6 +125,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi config                       ${DIM}# add/list/remove server aliases${RESET}
   ${DIM}$${RESET} cvmi check                        ${DIM}# check for skill updates${RESET}
   ${DIM}$${RESET} cvmi update                       ${DIM}# update installed skills${RESET}
+  ${DIM}$${RESET} cvmi cn add <pubkey>            ${DIM}# generate client code from server${RESET}
   `);
 }
 
@@ -1065,6 +1069,11 @@ async function main(): Promise<void> {
     }
     case 'config': {
       await runConfigCommand(restArgs);
+      break;
+    }
+    case 'compile':
+    case 'cn': {
+      await runCn(restArgs);
       break;
     }
     case '--help':

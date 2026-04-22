@@ -14,6 +14,7 @@ This file provides guidance to AI coding agents working on the `cvmi` CLI codeba
 | `cvmi add <pkg>`     | Install skills from git repos, URLs, or local paths |
 | `cvmi check`         | Check for available skill updates                   |
 | `cvmi update`        | Update all skills to latest versions                |
+| `cvmi pn` / `cn`     | Compile a server to TypeScript code                 |
 | `cvmi generate-lock` | Match installed skills to sources via API           |
 
 Aliases: `cvmi a`, `cvmi i`, `cvmi install` all work for `add`.
@@ -26,6 +27,7 @@ src/
 ├── cli.test.ts      # CLI tests
 ├── add.ts           # Core add command logic
 ├── add.test.ts      # Add command tests
+├── cn/              # Client generation (ctxcn) module
 ├── list.ts          # List installed skills command
 ├── list.test.ts     # List command tests
 ├── agents.ts        # Agent definitions and detection

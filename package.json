@@ -14,8 +14,8 @@
   ],
   "scripts": {
     "build": "obuild",
-    "dev": "node src/cli.ts",
-    "exec:test": "node scripts/execute-tests.ts",
+    "dev": "tsx src/cli.ts",
+    "exec:test": "tsx scripts/execute-tests.ts",
     "prepublishOnly": "npm run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -95,6 +95,7 @@
   "dependencies": {
     "@contextvm/sdk": "^0.8.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "json-schema-to-typescript": "15.0.4",
     "nostr-tools": "^2.23.3",
     "xdg-basedir": "^5.1.0",
     "zod": "^4.3.6"
@@ -111,6 +112,7 @@
     "picocolors": "^1.1.1",
     "prettier": "^3.8.1",
     "simple-git": "^3.33.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   },

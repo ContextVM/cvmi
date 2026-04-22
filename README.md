@@ -21,7 +21,7 @@ npx cvmi add --skill overview
 - [x] `cvmi serve` - Expose a server (gateway)
 - [x] `cvmi use` - Use a server from nostr as stdio (proxy)
 - [x] `cvmi discover` - Discover announced servers on relays
-- [ ] `cvmi cn` - Compile a server to code (ctxcn)
+- [x] `cvmi cn` - Compile a server to code (ctxcn)
 - [x] `cvmi call` - Call methods from a server
 - [ ] `cvmi inspect` - Inspect server schema
 
@@ -120,6 +120,26 @@ cvmi call weather tool:weather.get_current city=Lisbon
 
 # Use an alternate config file
 cvmi call weather tool:weather.get_current city=Lisbon --config ./custom.cvmi.json
+```
+
+### `cvmi cn`
+
+[`cvmi cn`](src/cn/index.ts) is fully integrated into `cvmi` (formerly `ctxcn`). It allows you to generate type-safe TypeScript clients directly from a Nostr MCP server.
+
+Examples:
+
+```bash
+# Initialize a new client generation environment
+cvmi cn init
+
+# Connect to a server and generate client code
+cvmi cn add <pubkey>
+
+# Update client code for a specific server
+cvmi cn update <pubkey>
+
+# Update all existing clients
+cvmi cn update
 ```
 
 ### `cvmi discover`
