@@ -1,9 +1,17 @@
 import { execSync } from 'child_process';
 import { join } from 'path';
 
-// const PROJECT_ROOT = join(import.meta.dirname, '..');
+const PROJECT_ROOT = join(import.meta.dirname, '..');
 const CLI_PATH = join(import.meta.dirname, 'cli.ts');
-const TSX_PATH = join(import.meta.dirname, '..', 'node_modules', 'tsx', 'dist', 'cli.mjs');
+const TSX_PATH = join(PROJECT_ROOT, 'node_modules', '.bin', 'tsx');
+
+function quoteArg(arg: string): string {
+  return JSON.stringify(arg);
+}
+
+function buildCliCommand(args: string[]): string {
+  return `${quoteArg(TSX_PATH)} ${quoteArg(CLI_PATH)} ${args.map(quoteArg).join(' ')}`.trim();
+}
 
 export function stripAnsi(str: string): string {
   return str.replace(/\x1b\[[0-9;]*m/g, '');
@@ -27,7 +35,7 @@ export function runCli(
   env?: Record<string, string>
 ): { stdout: string; stderr: string; exitCode: number } {
   try {
-    const output = execSync(`${process.execPath} ${TSX_PATH} ${CLI_PATH} ${args.join(' ')}`, {
+    const output = execSync(buildCliCommand(args), {
       encoding: 'utf-8',
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -55,7 +63,7 @@ export function runCliWithInput(
 ): { stdout: string; stderr: string; exitCode: number } {
   try {
     // Use cross-platform input handling (pipe via stdin instead of echo | on Windows)
-    const output = execSync(`${process.execPath} ${TSX_PATH} ${CLI_PATH} ${args.join(' ')}`, {
+    const output = execSync(buildCliCommand(args), {
       encoding: 'utf-8',
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],

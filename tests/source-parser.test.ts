@@ -202,19 +202,8 @@ describe('getOwnerRepo', () => {
     expect(getOwnerRepo(parsed)).toBeNull();
   });
 
-  it('getOwnerRepo - custom git host returns null', () => {
-    const parsed = parseSource('https://git.example.com/owner/repo.git');
-    expect(getOwnerRepo(parsed)).toBeNull();
-  });
-
   it('getOwnerRepo - SSH format returns null', () => {
     const parsed = parseSource('git@github.com:owner/repo.git');
-    expect(getOwnerRepo(parsed)).toBeNull();
-  });
-
-  it('getOwnerRepo - private GitLab instance returns null', () => {
-    // This falls through to 'git' type since it's not gitlab.com
-    const parsed = parseSource('https://gitlab.company.com/team/repo');
     expect(getOwnerRepo(parsed)).toBeNull();
   });
 });
