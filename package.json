@@ -1,6 +1,6 @@
 {
   "name": "cvmi",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "description": "ContextVM Interface",
   "type": "module",
   "bin": {
@@ -20,7 +20,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "test": "vitest src/",
+    "test": "vitest run --dir src",
     "type-check": "tsc --noEmit",
     "release": "pnpm run build && npm publish --tag next",
     "release:latest": "pnpm run build && npm publish",

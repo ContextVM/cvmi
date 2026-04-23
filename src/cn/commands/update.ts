@@ -1,4 +1,4 @@
-import { readdir } from 'fs/promises';
+import { readFile, readdir } from 'fs/promises';
 import path from 'path';
 import { toPascalCase } from '../utils.js';
 import { loadCnConfig } from '../config.js';
@@ -7,7 +7,11 @@ import { generateClientCode } from '../schema.js';
 import { createCvmConnection } from '../cvm-client.js';
 import { fileExists, writeFileWithDir } from '../file-operations.js';
 
-async function findExistingClientFile(cwd: string, sourceDir: string): Promise<string | null> {
+async function findExistingClientFile(
+  cwd: string,
+  sourceDir: string,
+  pubkey: string
+): Promise<string | null> {
   const outputDir = path.join(cwd, sourceDir);
   if (!(await fileExists(outputDir))) {
     return null;
@@ -15,10 +19,19 @@ async function findExistingClientFile(cwd: string, sourceDir: string): Promise<s
 
   try {
     const existingFiles = await readdir(outputDir);
-    const existingClientFile = existingFiles.find(
+    const clientFiles = existingFiles.filter(
       (file: string) => file.endsWith('.ts') && file.includes('Client')
     );
-    return existingClientFile || null;
+
+    for (const file of clientFiles) {
+      const filePath = path.join(outputDir, file);
+      const content = await readFile(filePath, 'utf-8');
+      if (content.includes(`static readonly SERVER_PUBKEY = "${pubkey}"`)) {
+        return file;
+      }
+    }
+
+    return clientFiles.length === 1 ? (clientFiles[0] ?? null) : null;
   } catch (error) {
     return null;
   }
@@ -107,7 +120,7 @@ async function updateSingleClient(cwd: string, config: any, pubkey: string) {
     const newServerName = toPascalCase(serverDetails?.name || 'UnknownServer');
 
     // Check if there's an existing client file to determine the old name
-    const existingClientFile = await findExistingClientFile(cwd, config.source);
+    const existingClientFile = await findExistingClientFile(cwd, config.source, pubkey);
 
     let oldServerName: string | null = null;
     if (existingClientFile) {
@@ -161,6 +174,9 @@ async function updateSingleClient(cwd: string, config: any, pubkey: string) {
 
     console.log(`✓ Updated client for ${serverName} at ${outputPath}`);
   } catch (error) {
+    if (error instanceof Error && /^EXIT:\d+$/.test(error.message)) {
+      throw error;
+    }
     console.error(`✗ Error in updating client ${pubkey}:`, error);
     process.exit(1);
   }

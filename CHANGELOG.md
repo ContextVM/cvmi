@@ -1,5 +1,15 @@
 # cvmi
 
+## 0.3.0
+
+### Minor Changes
+
+- bf97f32: Introduced the `cn` sub-command, including `init`, `add`, and `update` commands. Ported and adapted tests for the cn module, stabilized the integration testing environment, and updated corresponding documentation in README and AGENTS roadmap.
+
+### Patch Changes
+
+- Harden the new `cn` integration before release by adding command-level test coverage for `init`, `add`, `update`, and the top-level router, improving multi-client update matching to resolve generated clients by embedded server pubkey, and restricting `pnpm test` to only discover Vitest suites under `src`.
+
 ## 0.2.8
 
 ### Patch Changes

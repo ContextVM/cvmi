@@ -118,6 +118,9 @@ export async function handleAdd(pubkey: string, cwd: string) {
     closeReadlineInterface();
     process.exit(0);
   } catch (error) {
+    if (error instanceof Error && /^EXIT:\d+$/.test(error.message)) {
+      throw error;
+    }
     closeReadlineInterface();
     console.error(`✗ Error in connecting to server:`, error);
     process.exit(1);
