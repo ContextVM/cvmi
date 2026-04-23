@@ -10,6 +10,7 @@ interface NostrServerTransportOptions {
 
   // Optional - Server metadata
   serverInfo?: ServerInfo;
+  profileMetadata?: ProfileMetadata;
 
   // Optional - Discovery
   /** @deprecated Use isAnnouncedServer instead. */
@@ -42,6 +43,30 @@ interface ServerInfo {
   about?: string; // Description
 }
 ```
+
+## ProfileMetadata
+
+```typescript
+interface ProfileMetadata {
+  name?: string;
+  about?: string;
+  picture?: string;
+  banner?: string;
+  website?: string;
+  nip05?: string;
+  lud16?: string;
+  [key: string]: unknown;
+}
+```
+
+The `profileMetadata` object is serialized as JSON and published as a NIP-01 `kind:0` event. Publication is **opt-in** and only happens when `profileMetadata` is provided.
+
+Key behaviors:
+
+- `kind:0` publication is independent from `isAnnouncedServer`
+- A server can publish profile metadata even when it does **not** publish public announcement events
+- The profile event is sent through the same discoverability publication path as relay-list and announcement events
+- `bootstrapRelayUrls` also help distribute profile metadata in local or non-WebSocket relay environments
 
 ## CapabilityExclusion
 
@@ -111,6 +136,7 @@ isCapabilityExcluded: async (exclusion) => {
 - `publishRelayList` - TypeScript SDK option that publishes `kind:10002` relay-list metadata unless explicitly disabled
 - `relayListUrls` - Explicit relay URLs to advertise in the relay list
 - `bootstrapRelayUrls` - Extra relays where discoverability events are published without advertising them as operational relays
+- `profileMetadata` - Optional NIP-01 `kind:0` social profile metadata (CEP-23). Independent from `isAnnouncedServer`
 
 ## LogLevel
 

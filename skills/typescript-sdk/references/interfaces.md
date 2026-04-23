@@ -57,6 +57,23 @@ interface ServerInfo {
 }
 ```
 
+## ProfileMetadata
+
+```typescript
+interface ProfileMetadata {
+  name?: string;
+  about?: string;
+  picture?: string;
+  banner?: string;
+  website?: string;
+  nip05?: string;
+  lud16?: string;
+  [key: string]: unknown;
+}
+```
+
+Published as a NIP-01 `kind:0` event. See CEP-23. Optional and independent from `isAnnouncedServer`.
+
 ## BaseNostrTransportOptions
 
 ```typescript
@@ -82,6 +99,7 @@ interface NostrTransportOptions extends BaseNostrTransportOptions {
 ```typescript
 interface NostrServerTransportOptions extends BaseNostrTransportOptions {
   serverInfo?: ServerInfo;
+  profileMetadata?: ProfileMetadata;
   /** @deprecated Use isAnnouncedServer instead. */
   isPublicServer?: boolean;
   isAnnouncedServer?: boolean;

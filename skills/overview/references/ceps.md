@@ -124,6 +124,46 @@ Bounded oversized payload transfer for ContextVM using MCP `notifications/progre
 
 ---
 
+## CEP-23: Server Profile Metadata and Social Communications
+
+**Status**: Draft
+
+### Summary
+
+Optional social presence primitives for ContextVM servers using standard Nostr events: `kind:0` profile metadata and `kind:1` notes for social communications.
+
+### Key Points
+
+- Servers MAY publish `kind:0` metadata signed by the same server keypair used for protocol operation and announcements
+- Servers MAY also publish regular `kind:1` notes for social announcements, public updates, changelogs, and operator communication
+- Profile metadata publication is explicitly **opt-in** via the `profileMetadata` transport option
+- `kind:0` publication is independent from `isAnnouncedServer` — a server can publish profile metadata even when it does not publish public announcement events
+- `serverInfo` powers ContextVM discovery and initialize semantics; `profileMetadata` powers Nostr social/profile identity
+- Common `kind:0` fields: `name`, `about`, `picture`, `banner`, `website`, `nip05`, `lud16`
+
+### SDK Configuration
+
+```typescript
+const transport = new NostrServerTransport({
+  signer,
+  relayHandler: relayPool,
+  isAnnouncedServer: true,
+  profileMetadata: {
+    name: 'My Awesome MCP Server',
+    about: 'Public MCP provider on Nostr',
+    picture: 'https://example.com/avatar.png',
+    website: 'https://example.com',
+    nip05: 'server@example.com',
+  },
+  serverInfo: {
+    name: 'My Awesome MCP Server',
+    website: 'https://example.com',
+  },
+});
+```
+
+---
+
 ## CEP-16: Client Public Key Injection
 
 **Status**: Final

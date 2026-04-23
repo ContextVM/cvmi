@@ -60,7 +60,14 @@ async function main() {
       about: 'A starter template for ContextVM servers',
     },
     // Optional: Enable public announcements
-    isPublicServer: true,
+    isAnnouncedServer: true,
+    // Optional: Publish Nostr kind:0 social profile (CEP-23)
+    // profileMetadata: {
+    //   name: 'ContextVM Starter Server',
+    //   about: 'A starter template for ContextVM servers',
+    //   picture: 'https://example.com/avatar.png',
+    //   website: 'https://example.com',
+    // },
     // Optional: Require encryption
     encryptionMode: EncryptionMode.OPTIONAL,
     // Optional: Inject client pubkey into _meta

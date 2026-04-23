@@ -50,6 +50,7 @@ console.log('Server running on Nostr');
 | `signer`               | `NostrSigner`              | Required. Signs all Nostr events                    |
 | `relayHandler`         | `RelayHandler \| string[]` | Required. Relay connection manager.                 |
 | `serverInfo`           | `ServerInfo`               | Optional. Metadata for announcements                |
+| `profileMetadata`      | `ProfileMetadata`          | Optional. Nostr `kind:0` social profile (CEP-23)    |
 | `isAnnouncedServer`    | `boolean`                  | Publish server announcements. Default: `false`      |
 | `publishRelayList`     | `boolean`                  | Publish `kind:10002` relay-list metadata            |
 | `relayListUrls`        | `string[]`                 | Explicit relay URLs to advertise                    |
@@ -175,6 +176,38 @@ Publishes events on kinds 11316-11320 with your server's capabilities. In the Ty
 - Use `relayListUrls` only if you need to override the advertised relay list
 - Use `bootstrapRelayUrls` when you want broader discoverability publication without advertising those relays as operational endpoints
 - Set `publishRelayList: false` only if you intentionally want to disable CEP-17 relay-list publication
+
+## Server Profile Metadata (CEP-23)
+
+Publish a Nostr `kind:0` social profile alongside your server. This is opt-in and independent from `isAnnouncedServer`.
+
+`serverInfo` and `profileMetadata` serve different purposes:
+
+- **`serverInfo`** powers ContextVM discovery and initialize semantics
+- **`profileMetadata`** powers an optional Nostr social/profile identity via `kind:0`
+
+This separation matters because some servers want to be discoverable over ContextVM without maintaining a public social profile, while others want both.
+
+```typescript
+const transport = new NostrServerTransport({
+  signer,
+  relayHandler: relayPool,
+  isAnnouncedServer: true,
+  profileMetadata: {
+    name: 'My Awesome MCP Server',
+    about: 'Public MCP provider on Nostr',
+    picture: 'https://example.com/avatar.png',
+    website: 'https://example.com',
+    nip05: 'server@example.com',
+  },
+  serverInfo: {
+    name: 'My Awesome MCP Server',
+    website: 'https://example.com',
+  },
+});
+```
+
+A server can publish profile metadata even when it does **not** publish public announcement events. The profile event is sent through the same discoverability publication path as relay-list and announcement events, so `bootstrapRelayUrls` also help distribute profile metadata in local or non-WebSocket relay environments.
 
 ## Client Public Key Injection
 
