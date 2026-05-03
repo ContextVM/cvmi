@@ -72,6 +72,8 @@ async function main() {
     encryptionMode: EncryptionMode.OPTIONAL,
     // Optional: Inject client pubkey into _meta
     injectClientPubkey: true,
+    // Optional: Inject inbound request event ID into _meta
+    // injectRequestEventId: true,
   });
 
   // 5. Connect and run

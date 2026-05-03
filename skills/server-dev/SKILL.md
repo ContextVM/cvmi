@@ -45,23 +45,24 @@ console.log('Server running on Nostr');
 
 ## NostrServerTransport Options
 
-| Option                 | Type                       | Description                                         |
-| ---------------------- | -------------------------- | --------------------------------------------------- |
-| `signer`               | `NostrSigner`              | Required. Signs all Nostr events                    |
-| `relayHandler`         | `RelayHandler \| string[]` | Required. Relay connection manager.                 |
-| `serverInfo`           | `ServerInfo`               | Optional. Metadata for announcements                |
-| `profileMetadata`      | `ProfileMetadata`          | Optional. Nostr `kind:0` social profile (CEP-23)    |
-| `isAnnouncedServer`    | `boolean`                  | Publish server announcements. Default: `false`      |
-| `publishRelayList`     | `boolean`                  | Publish `kind:10002` relay-list metadata            |
-| `relayListUrls`        | `string[]`                 | Explicit relay URLs to advertise                    |
-| `bootstrapRelayUrls`   | `string[]`                 | Extra discoverability publication relays            |
-| `allowedPublicKeys`    | `string[]`                 | Whitelist client public keys                        |
-| `isPubkeyAllowed`      | `function`                 | Dynamic pubkey authorization callback               |
-| `excludedCapabilities` | `CapabilityExclusion[]`    | Bypass whitelist for specific methods               |
-| `isCapabilityExcluded` | `function`                 | Dynamic capability exclusion callback               |
-| `injectClientPubkey`   | `boolean`                  | Inject client pubkey into `_meta`. Default: `false` |
-| `encryptionMode`       | `EncryptionMode`           | `OPTIONAL`, `REQUIRED`, or `DISABLED`               |
-| `oversizedTransfer`    | `object`                   | CEP-22 oversized payload transfer configuration     |
+| Option                 | Type                       | Description                                                    |
+| ---------------------- | -------------------------- | -------------------------------------------------------------- |
+| `signer`               | `NostrSigner`              | Required. Signs all Nostr events                               |
+| `relayHandler`         | `RelayHandler \| string[]` | Required. Relay connection manager.                            |
+| `serverInfo`           | `ServerInfo`               | Optional. Metadata for announcements                           |
+| `profileMetadata`      | `ProfileMetadata`          | Optional. Nostr `kind:0` social profile (CEP-23)               |
+| `isAnnouncedServer`    | `boolean`                  | Publish server announcements. Default: `false`                 |
+| `publishRelayList`     | `boolean`                  | Publish `kind:10002` relay-list metadata                       |
+| `relayListUrls`        | `string[]`                 | Explicit relay URLs to advertise                               |
+| `bootstrapRelayUrls`   | `string[]`                 | Extra discoverability publication relays                       |
+| `allowedPublicKeys`    | `string[]`                 | Whitelist client public keys                                   |
+| `isPubkeyAllowed`      | `function`                 | Dynamic pubkey authorization callback                          |
+| `excludedCapabilities` | `CapabilityExclusion[]`    | Bypass whitelist for specific methods                          |
+| `isCapabilityExcluded` | `function`                 | Dynamic capability exclusion callback                          |
+| `injectClientPubkey`   | `boolean`                  | Inject client pubkey into `_meta`. Default: `false`            |
+| `injectRequestEventId` | `boolean`                  | Inject inbound request event ID into `_meta`. Default: `false` |
+| `encryptionMode`       | `EncryptionMode`           | `OPTIONAL`, `REQUIRED`, or `DISABLED`                          |
+| `oversizedTransfer`    | `object`                   | CEP-22 oversized payload transfer configuration                |
 
 ## Oversized Transfer
 
@@ -225,6 +226,45 @@ server.registerTool("personalized", {...}, async (args, extra) => {
   const clientPubkey = extra._meta?.clientPubkey;
   // Use pubkey for personalization, rate limiting, etc.
 });
+```
+
+## Request Event ID Injection
+
+When `injectRequestEventId` is enabled, the inbound Nostr event ID is injected into `_meta.requestEventId`. Use `transport.getNostrRequestEvent()` inside a tool handler to retrieve the full signed Nostr event, including the sender's pubkey and all event metadata.
+
+```typescript
+const transport = new NostrServerTransport({
+  signer,
+  relayHandler: relayPool,
+  injectRequestEventId: true,
+});
+
+server.registerTool(
+  'whoami',
+  {
+    description: 'Returns the public key of the client that invoked this tool.',
+    inputSchema: {},
+  },
+  async (_args, extra) => {
+    const requestEventId = extra._meta?.requestEventId;
+    if (requestEventId) {
+      const requestEvent = transport.getNostrRequestEvent(requestEventId);
+      if (requestEvent) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Called by ${requestEvent.pubkey} at timestamp ${requestEvent.created_at}`,
+            },
+          ],
+        };
+      }
+    }
+    return {
+      content: [{ type: 'text', text: 'unknown caller' }],
+    };
+  }
+);
 ```
 
 ## Structured Outputs

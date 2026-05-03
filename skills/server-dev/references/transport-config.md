@@ -28,6 +28,7 @@ interface NostrServerTransportOptions {
 
   // Optional - Features
   injectClientPubkey?: boolean;
+  injectRequestEventId?: boolean;
   encryptionMode?: EncryptionMode;
   logLevel?: LogLevel;
 }

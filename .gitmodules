@@ -1,6 +1,0 @@
-[submodule "contextvm-docs"]
-	path = contextvm-docs
-	url = git@github.com:ContextVM/contextvm-docs
-[submodule "sdk"]
-	path = sdk
-	url = git@github.com:ContextVM/sdk.git

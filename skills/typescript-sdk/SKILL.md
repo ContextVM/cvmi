@@ -73,6 +73,7 @@ interface RelayHandler {
     onEose?: () => void
   ): Promise<void>;
   unsubscribe(): void;
+  getRelayUrls(): string[];
 }
 ```
 

@@ -193,7 +193,8 @@ When enabled, requests include `_meta.clientPubkey`:
   "method": "tools/call",
   "params": {...},
   "_meta": {
-    "clientPubkey": "<client-public-key-hex>"
+    "clientPubkey": "<client-public-key-hex>",
+    "requestEventId": "<nostr-event-id-hex>"
   }
 }
 ```

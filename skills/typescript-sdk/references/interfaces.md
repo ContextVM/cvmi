@@ -43,6 +43,7 @@ interface RelayHandler {
 
   /** Unsubscribe from all active subscriptions */
   unsubscribe(): void;
+  getRelayUrls(): string[];
 }
 ```
 
@@ -109,6 +110,7 @@ interface NostrServerTransportOptions extends BaseNostrTransportOptions {
   allowedPublicKeys?: string[];
   excludedCapabilities?: CapabilityExclusion[];
   injectClientPubkey?: boolean;
+  injectRequestEventId?: boolean;
 }
 ```
 
