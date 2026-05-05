@@ -35,7 +35,11 @@ import {
   EncryptionMode,
   CTXVM_MESSAGES_KIND,
   SERVER_ANNOUNCEMENT_KIND,
+  COMMON_SCHEMA_META_NAMESPACE,
+  computeCommonSchemaHash,
   createLogger,
+  normalizeSchema,
+  withCommonToolSchemas,
 } from '@contextvm/sdk';
 ```
 
@@ -182,6 +186,34 @@ Relevant options:
 - `policy`: receiver-side limits for bytes, chunks, concurrency, ordering window, and timeout
 
 Use lower thresholds or chunk sizes when relays are more restrictive. Tighten policy values when operating in resource-constrained or adversarial environments.
+
+## CEP-15 Common Tool Schemas
+
+Use `withCommonToolSchemas()` when a server tool is intended to match a shared CEP-15 contract across providers.
+
+```typescript
+const transport = withCommonToolSchemas(
+  new NostrServerTransport({
+    signer,
+    relayHandler: relayPool,
+    isAnnouncedServer: true,
+  }),
+  {
+    tools: [{ name: 'translate_text' }],
+  }
+);
+
+await server.connect(transport);
+```
+
+Important behavior:
+
+- the SDK computes the schema hash from the tool `name`, normalized `inputSchema`, and optional `outputSchema`
+- `_meta['io.contextvm/common-schema'].schemaHash` is injected into `tools/list` results
+- matching `i` and `k` tags are added to announced tools lists
+- remote `$ref` values must be resolved before hashing
+
+Use `computeCommonSchemaHash()` and `normalizeSchema()` for manual verification, tests, or advanced custom flows.
 
 ## Logging
 

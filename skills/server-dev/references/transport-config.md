@@ -139,6 +139,36 @@ isCapabilityExcluded: async (exclusion) => {
 - `bootstrapRelayUrls` - Extra relays where discoverability events are published without advertising them as operational relays
 - `profileMetadata` - Optional NIP-01 `kind:0` social profile metadata (CEP-23). Independent from `isAnnouncedServer`
 
+## CEP-15 Common Tool Schemas
+
+CEP-15 common tool schema publication is configured by decorating `NostrServerTransport` with `withCommonToolSchemas()`.
+
+```typescript
+const transport = withCommonToolSchemas(
+  new NostrServerTransport({
+    signer,
+    relayHandler: relayPool,
+    isAnnouncedServer: true,
+  }),
+  {
+    tools: [{ name: 'translate_text' }],
+  }
+);
+```
+
+Behavior:
+
+- computes a schema hash from the tool `name`, normalized `inputSchema`, and optional `outputSchema`
+- injects `_meta['io.contextvm/common-schema'].schemaHash` into `tools/list`
+- adds matching `i` and `k` tags to announced tools lists
+
+Constraints:
+
+- use this only for tools that intentionally match a shared public contract
+- tool `name` is part of the schema identity
+- `outputSchema` affects the hash when present
+- remote `$ref` values must be resolved before hashing
+
 ## LogLevel
 
 - `debug` - Detailed tracing

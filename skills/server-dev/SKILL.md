@@ -170,6 +170,29 @@ const transport = new NostrServerTransport({
 
 Publishes events on kinds 11316-11320 with your server's capabilities. In the TypeScript SDK, `publishRelayList` is independent from `isAnnouncedServer` and defaults to enabled, so relay-list metadata is published unless you explicitly opt out.
 
+## CEP-15 Common Tool Schemas
+
+If a tool is meant to implement a shared public contract, decorate the transport with `withCommonToolSchemas()` before connecting the server.
+
+```typescript
+const transport = withCommonToolSchemas(
+  new NostrServerTransport({
+    signer,
+    relayHandler: relayPool,
+    isAnnouncedServer: true,
+  }),
+  {
+    tools: [{ name: 'translate_text' }],
+  }
+);
+
+await server.connect(transport);
+```
+
+This makes the SDK publish `_meta['io.contextvm/common-schema'].schemaHash` in `tools/list` and matching `i`/`k` announcement tags for the opted-in tools.
+
+Use this only for tools that intentionally follow a shared CEP-15 schema. Tool `name` and `outputSchema` affect compatibility, and remote `$ref` values must be resolved before hashing.
+
 ### Relay-list publication strategy
 
 - CEP-17 is protocol-level and implementation-agnostic; the defaults below describe the TypeScript SDK behavior, not a protocol requirement
