@@ -200,6 +200,7 @@ const transport = withCommonToolSchemas(
   }),
   {
     tools: [{ name: 'translate_text' }],
+    categories: ['translation', 'language-tools'],
   }
 );
 
@@ -211,6 +212,7 @@ Important behavior:
 - the SDK computes the schema hash from the tool `name`, normalized `inputSchema`, and optional `outputSchema`
 - `_meta['io.contextvm/common-schema'].schemaHash` is injected into `tools/list` results
 - matching `i` and `k` tags are added to announced tools lists
+- optional CEP-15 `t` tags are added when `categories` are configured; whitespace is trimmed, empty values are dropped, and duplicates are removed
 - remote `$ref` values must be resolved before hashing
 
 Use `computeCommonSchemaHash()` and `normalizeSchema()` for manual verification, tests, or advanced custom flows.

@@ -183,15 +183,16 @@ const transport = withCommonToolSchemas(
   }),
   {
     tools: [{ name: 'translate_text' }],
+    categories: ['translation', 'language-tools'],
   }
 );
 
 await server.connect(transport);
 ```
 
-This makes the SDK publish `_meta['io.contextvm/common-schema'].schemaHash` in `tools/list` and matching `i`/`k` announcement tags for the opted-in tools.
+This makes the SDK publish `_meta['io.contextvm/common-schema'].schemaHash` in `tools/list`, matching `i`/`k` announcement tags for the opted-in tools, and optional `t` category tags when `categories` are configured.
 
-Use this only for tools that intentionally follow a shared CEP-15 schema. Tool `name` and `outputSchema` affect compatibility, and remote `$ref` values must be resolved before hashing.
+Use this only for tools that intentionally follow a shared CEP-15 schema. Tool `name` and `outputSchema` affect compatibility, remote `$ref` values must be resolved before hashing, and `categories` are announcement-level discoverability hints rather than part of schema verification.
 
 ### Relay-list publication strategy
 

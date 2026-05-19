@@ -152,6 +152,7 @@ const transport = withCommonToolSchemas(
   }),
   {
     tools: [{ name: 'translate_text' }],
+    categories: ['translation', 'language-tools'],
   }
 );
 ```
@@ -161,12 +162,14 @@ Behavior:
 - computes a schema hash from the tool `name`, normalized `inputSchema`, and optional `outputSchema`
 - injects `_meta['io.contextvm/common-schema'].schemaHash` into `tools/list`
 - adds matching `i` and `k` tags to announced tools lists
+- adds optional `t` category tags to announced tools lists when `categories` are configured
 
 Constraints:
 
 - use this only for tools that intentionally match a shared public contract
 - tool `name` is part of the schema identity
 - `outputSchema` affects the hash when present
+- `categories` are best-effort announcement tags and do not affect schema identity
 - remote `$ref` values must be resolved before hashing
 
 ## LogLevel
