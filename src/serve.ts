@@ -193,11 +193,17 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
         );
       }
 
+      // NEW: Create a dedicated announcement transport for HTTP targets when public.
+      const announcementTransport = serveConfig.public
+        ? createStreamableHttpMcpTransport(target)
+        : undefined;
+
       gateway = new NostrMCPGateway({
         // Per-client mode is required for HTTP transports because the transport maintains
         // per-session state (e.g., mcp-session-id) and must be isolated per Nostr client.
         createMcpClientTransport: ({ clientPubkey: _clientPubkey }) =>
           createStreamableHttpMcpTransport(target),
+        announcementMcpTransport: announcementTransport,
         nostrTransportOptions,
       });
     } else {

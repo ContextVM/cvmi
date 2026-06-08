@@ -1,5 +1,13 @@
 # cvmi
 
+## 0.3.1
+
+### Patch Changes
+
+- feat(serve): add announcement transport for public HTTP targets
+
+  Create a dedicated announcement transport for HTTP targets when serving in public mode, allowing the NostrMCPGateway to handle announcements separately from per-client transports.
+
 ## 0.3.0
 
 ### Minor Changes
