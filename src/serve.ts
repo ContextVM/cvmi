@@ -12,6 +12,9 @@ import { NostrMCPGateway, PrivateKeySigner, EncryptionMode } from '@contextvm/sd
 import { loadConfig, getServeConfig, DEFAULT_RELAYS } from './config/index.ts';
 import { generatePrivateKey, normalizePrivateKey } from './utils/crypto.ts';
 import { waitForShutdownSignal } from './utils/process.ts';
+import { extractBundle } from './pack/extract.ts';
+import { DEFAULT_CVM_META } from './pack/cvm-manifest.ts';
+import fs from 'fs';
 import { BOLD, DIM, RESET } from './constants/ui.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { savePrivateKeyToEnv } from './config/loader.ts';
@@ -120,13 +123,50 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
   // Priority:
   // - CLI args (positional) override config entirely
   // - otherwise config.url (remote Streamable HTTP) wins over config.command/config.args
-  const target =
+  let target =
     serverArgs.length > 0 ? serverArgs[0] : serveConfig.url ? serveConfig.url : serveConfig.command;
-  const targetArgs = serverArgs.length > 0 ? serverArgs.slice(1) : (serveConfig.args ?? []);
+  let targetArgs = serverArgs.length > 0 ? serverArgs.slice(1) : (serveConfig.args ?? []);
 
   if (!target) {
     showServeHelp();
     process.exit(1);
+  }
+
+  let cleanupPath: string | undefined;
+
+  // Handle .mcpb bundle execution
+  if (target.endsWith('.mcpb')) {
+    p.log.info(`Extracting bundle ${target}...`);
+    try {
+      const { dir, manifest } = await extractBundle(target);
+      cleanupPath = dir;
+
+      // Load default CVM config from manifest
+      const meta = manifest._meta?.['com.contextvm'] || DEFAULT_CVM_META;
+
+      // Override serveConfig with manifest defaults (CLI flags already win due to precedence)
+      if (options.relays === undefined && !config.serve?.relays) {
+        serveConfig.relays = meta.default_relays;
+      }
+      if (options.public === undefined && !config.serve?.public) {
+        serveConfig.public = meta.public;
+      }
+      if (options.encryption === undefined && !config.serve?.encryption) {
+        serveConfig.encryption = meta.encryption as EncryptionMode;
+      }
+      // TODO: Handle 'announce' and 'pricing' if/when NostrMCPGateway supports them directly
+
+      target = manifest.server.mcp_config.command.replace(/\$\{__dirname\}/g, dir);
+      const rawArgs = manifest.server.mcp_config.args || [];
+      // Replace ${__dirname} with the extracted directory
+      targetArgs = rawArgs.map((arg) => arg.replace(/\$\{__dirname\}/g, dir));
+
+      // Merge env vars from user_config if needed (stub for future user_config support)
+      // mcpEnv = { ...mcpEnv, ... };
+    } catch (error) {
+      p.log.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
   }
 
   // Auto-generate private key if not provided
@@ -227,6 +267,11 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
   p.log.message(`\n${signal} received. Shutting down...`);
   await gateway.stop();
 
+  if (cleanupPath && fs.existsSync(cleanupPath)) {
+    p.log.message(`Cleaning up temporary bundle at ${cleanupPath}`);
+    fs.rmSync(cleanupPath, { recursive: true, force: true });
+  }
+
   process.exit(0);
 }
 
@@ -246,6 +291,8 @@ ${BOLD}Arguments:${RESET}
                             Can also be specified in config file under serve.command
   <mcp-server-url>        If the first argument is an http(s) URL, cvmi will treat it as a Streamable HTTP MCP server
                             and connect via HTTP instead of spawning a local process.
+  <bundle.mcpb>           If the first argument is an .mcpb file, cvmi will extract the bundle,
+                            read the manifest, apply CVM config defaults, and spawn the server.
 
 ${BOLD}Config keys:${RESET}
   serve.url                Optional remote MCP server URL (Streamable HTTP). If set, it is used when no CLI target
@@ -304,6 +351,8 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi serve https://mcp.server.com ${DIM}# expose a remote Streamable HTTP MCP server over Nostr${RESET}
   ${DIM}$${RESET} cvmi serve npx -y @modelcontextprotocol/server-prompt-generator --public ${DIM}# public server${RESET}
   ${DIM}$${RESET} cvmi serve python /path/to/server.py --relays wss://my-relay.com ${DIM}# custom relay${RESET}
+  ${DIM}$${RESET} cvmi serve my-server-1.0.0.mcpb ${DIM}# run an MCPB bundle over Nostr${RESET}
+  ${DIM}$${RESET} cvmi serve --help ${DIM}# show this help${RESET}
   ${DIM}$${RESET} cvmi serve --help ${DIM}# show this help${RESET}
   `);
 }

@@ -20,6 +20,7 @@ import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { track } from './telemetry.ts';
 import { serve, showServeHelp } from './serve.ts';
+import { pack, showPackHelp, parsePackArgs } from './pack.ts';
 import { showUseHelp, use } from './use.ts';
 import { call, parseCallArgs, showCallHelp } from './call.ts';
 import { discover, parseDiscoverArgs, showDiscoverHelp } from './discover.ts';
@@ -64,6 +65,7 @@ function showBanner(): void {
   console.log();
   const entries: [string, string][] = [
     ['npx cvmi add [options]', 'Install ContextVM skills'],
+    ['npx cvmi pack [options]', 'Package a server into an MCPB bundle'],
     ['npx cvmi serve [options] -- <cmd>', 'Expose MCP server over Nostr'],
     ['npx cvmi use <pubkey>', 'Connect to Nostr MCP server'],
     ['npx cvmi config <command>', 'Manage saved server aliases'],
@@ -93,6 +95,7 @@ ${BOLD}Commands:${RESET}
   remove, rm, r          Remove installed skills
   list, ls               List installed skills
   init [name]            Initialize a new skill
+  pack                   Package an MCP server into an MCPB bundle
   sync                   Sync skills from node_modules
   serve                  Expose an MCP server over Nostr
   use                    Connect to a remote Nostr MCP server
@@ -117,7 +120,9 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi add                          ${DIM}# install embedded ContextVM skills${RESET}
   ${DIM}$${RESET} cvmi add --skill overview         ${DIM}# install a specific skill${RESET}
   ${DIM}$${RESET} cvmi remove <skill>               ${DIM}# remove an installed skill${RESET}
+  ${DIM}$${RESET} cvmi pack                         ${DIM}# pack a server into .mcpb bundle${RESET}
   ${DIM}$${RESET} cvmi serve -- <command-or-url>    ${DIM}# start gateway, expose an already existing server (stdio or http) over nostr${RESET}
+  ${DIM}$${RESET} cvmi serve my-server.mcpb         ${DIM}# serve a packed mcpb bundle over nostr${RESET}
   ${DIM}$${RESET} cvmi use <server-pubkey>          ${DIM}# connect to remote MCP server, expose it as stdio${RESET}
   ${DIM}$${RESET} cvmi discover                     ${DIM}# find public ContextVM servers${RESET}
   ${DIM}$${RESET} cvmi call <server>                ${DIM}# list remote capabilities${RESET}
@@ -957,6 +962,23 @@ async function main(): Promise<void> {
     case 'upgrade':
       runUpdate();
       break;
+    case 'pack': {
+      const parsed = parsePackArgs(restArgs);
+
+      if (parsed.unknownFlags.length > 0) {
+        console.error(`Unknown flag(s): ${parsed.unknownFlags.join(', ')}`);
+        console.error(`Run 'cvmi pack --help' for usage.`);
+        process.exit(1);
+      }
+
+      if (parsed.help) {
+        showPackHelp();
+        break;
+      }
+
+      await pack(parsed.targetDir, parsed.options);
+      break;
+    }
     case 'serve': {
       ensureRelayRuntime();
       // Check for --help or -h flag (only before `--` separator)
