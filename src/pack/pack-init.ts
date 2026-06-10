@@ -2,7 +2,6 @@ import * as p from '@clack/prompts';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { DEFAULT_RELAYS } from '../config/index.ts';
-import type { EncryptionMode } from '@contextvm/sdk';
 
 export async function runPackInit(dir: string): Promise<boolean> {
   const manifestPath = join(dir, 'manifest.json');
@@ -68,10 +67,21 @@ export async function runPackInit(dir: string): Promise<boolean> {
             { value: 'node', label: 'Node.js' },
             { value: 'python', label: 'Python' },
             { value: 'binary', label: 'Binary' },
+            { value: 'docker', label: 'Docker' },
           ],
           initialValue: 'node',
         }),
+      image: ({ results }) => {
+        if (results.type !== 'docker') return Promise.resolve(undefined);
+        return p.text({
+          message: 'Docker image (e.g., ghcr.io/dev/my-server:1.0.0)',
+          validate: (value) => {
+            if (!value) return 'Please enter a Docker image reference.';
+          },
+        });
+      },
       entryPoint: ({ results }) => {
+        if (results.type === 'docker') return Promise.resolve(undefined);
         let initial = 'index.js';
         if (results.type === 'node') initial = 'build/index.js';
         if (results.type === 'python') initial = 'src/server.py';
@@ -81,16 +91,22 @@ export async function runPackInit(dir: string): Promise<boolean> {
           initialValue: initial,
         });
       },
-      command: ({ results }) => {
-        let initial = 'node';
-        if (results.type === 'python') initial = 'python';
-        if (results.type === 'binary') initial = `\${__dirname}/${results.entryPoint}`;
-        return p.text({
-          message: 'Command to run (mcp_config)',
-          initialValue: initial,
-        });
-      },
-      public: () =>
+      transport: () =>
+        p.select({
+          message: 'Transport mode',
+          options: [
+            {
+              value: 'stdio',
+              label: 'stdio (Gateway wraps the server, simplest)',
+            },
+            {
+              value: 'cvm',
+              label: 'cvm (Server uses CVM SDK directly, advanced)',
+            },
+          ],
+          initialValue: 'stdio',
+        }),
+      isPublic: () =>
         p.confirm({
           message: 'Should this server be public? (accept connections from any pubkey)',
           initialValue: false,
@@ -108,12 +124,7 @@ export async function runPackInit(dir: string): Promise<boolean> {
             { value: 'optional', label: 'Optional (Fallback to unencrypted)' },
             { value: 'disabled', label: 'Disabled (Unencrypted)' },
           ],
-          initialValue: 'optional' as EncryptionMode,
-        }),
-      announce: () =>
-        p.confirm({
-          message: 'Announce server on Nostr? (publish kind 11316-11320)',
-          initialValue: true,
+          initialValue: 'optional',
         }),
     },
     {
@@ -129,6 +140,57 @@ export async function runPackInit(dir: string): Promise<boolean> {
     .map((r) => r.trim())
     .filter((r) => r);
 
+  // Build mcp_config based on server type
+  let mcpConfig: { command: string; args: string[] };
+  if (result.type === 'docker') {
+    mcpConfig = {
+      command: 'docker',
+      args: ['run', '--rm', '-i', result.image as string],
+    };
+  } else if (result.type === 'binary') {
+    mcpConfig = {
+      command: `\${__dirname}/${result.entryPoint}`,
+      args: [],
+    };
+  } else {
+    const cmd = result.type === 'python' ? 'python' : 'node';
+    mcpConfig = {
+      command: cmd,
+      args: [`\${__dirname}/${result.entryPoint}`],
+    };
+  }
+
+  // Build server section
+  const server: Record<string, unknown> = {
+    type: result.type,
+    mcp_config: mcpConfig,
+  };
+  if (result.type === 'docker') {
+    server.image = result.image;
+  } else {
+    server.entry_point = result.entryPoint;
+  }
+
+  // Build CVM meta
+  const cvmMeta: Record<string, unknown> = {
+    transport: result.transport,
+    defaults: {
+      relays: relaysList,
+      encryption: result.encryption,
+      public: result.isPublic,
+    },
+  };
+
+  // For native CVM transport, add default env_mapping
+  if (result.transport === 'cvm') {
+    cvmMeta.env_mapping = {
+      relays: 'CVM_RELAYS',
+      encryption: 'CVM_ENCRYPTION',
+      public: 'CVM_PUBLIC',
+      private_key: 'CVM_PRIVATE_KEY',
+    };
+  }
+
   const manifest = {
     manifest_version: '0.3',
     name: result.name,
@@ -138,22 +200,9 @@ export async function runPackInit(dir: string): Promise<boolean> {
     author: {
       name: result.author,
     },
-    server: {
-      type: result.type,
-      entry_point: result.entryPoint,
-      mcp_config: {
-        command: result.command,
-        args: result.type === 'binary' ? [] : [`\${__dirname}/${result.entryPoint}`],
-      },
-    },
+    server,
     _meta: {
-      'com.contextvm': {
-        public: result.public,
-        default_relays: relaysList,
-        encryption: result.encryption,
-        announce: result.announce,
-        pricing: null,
-      },
+      'com.contextvm': cvmMeta,
     },
   };
 

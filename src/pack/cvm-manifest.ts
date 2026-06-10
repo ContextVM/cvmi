@@ -1,12 +1,27 @@
 import { z } from 'zod';
 import { DEFAULT_RELAYS } from '../config/index.ts';
 
-export const CVMMetaSchema = z.object({
-  public: z.boolean().default(false),
-  default_relays: z.array(z.string()).default(DEFAULT_RELAYS),
+// CVM-specific defaults for a bundle
+export const CVMDefaultsSchema = z.object({
+  relays: z.array(z.string()).default(DEFAULT_RELAYS),
   encryption: z.enum(['nip44', 'optional', 'disabled']).default('optional'),
-  announce: z.boolean().default(true),
-  pricing: z.any().nullable().default(null),
+  public: z.boolean().default(false),
+});
+
+export type CVMDefaults = z.infer<typeof CVMDefaultsSchema>;
+
+// The env_mapping contract: maps config keys to env var names
+export const CVMEnvMappingSchema = z
+  .record(z.enum(['relays', 'encryption', 'public', 'private_key']), z.string())
+  .optional();
+
+export type CVMEnvMapping = z.infer<typeof CVMEnvMappingSchema>;
+
+// Top-level CVM meta namespace
+export const CVMMetaSchema = z.object({
+  transport: z.enum(['stdio', 'cvm']).default('stdio'),
+  env_mapping: CVMEnvMappingSchema,
+  defaults: CVMDefaultsSchema.optional(),
 });
 
 export type CVMMeta = z.infer<typeof CVMMetaSchema>;
@@ -25,8 +40,10 @@ export const McpbManifestSchema = z
       url: z.string().optional(),
     }),
     server: z.object({
-      type: z.enum(['node', 'python', 'binary']),
-      entry_point: z.string(),
+      type: z.enum(['node', 'python', 'binary', 'docker']),
+      entry_point: z.string().optional(),
+      image: z.string().optional(),
+      compose_file: z.string().optional(),
       mcp_config: z.object({
         command: z.string(),
         args: z.array(z.string()).optional(),
@@ -48,9 +65,11 @@ export function validateManifest(data: unknown): McpbManifest {
 }
 
 export const DEFAULT_CVM_META: CVMMeta = {
-  public: false,
-  default_relays: DEFAULT_RELAYS,
-  encryption: 'optional',
-  announce: true,
-  pricing: null,
+  transport: 'stdio',
+  env_mapping: undefined,
+  defaults: {
+    relays: DEFAULT_RELAYS,
+    encryption: 'optional',
+    public: false,
+  },
 };

@@ -59,6 +59,12 @@ export async function pack(targetDir: string = '.', options: PackOptions = {}): 
     }
   }
 
+  if (manifest.server.type === 'docker' && !manifest.server.image) {
+    p.log.warn(
+      'Docker server type detected but no "image" field found in manifest. Bundle may not work.'
+    );
+  }
+
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const output = createWriteStream(outPath);
     const archive = archiver('zip', {
