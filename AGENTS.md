@@ -8,14 +8,15 @@ This file provides guidance to AI coding agents working on the `cvmi` CLI codeba
 
 ## Commands
 
-| Command              | Description                                         |
-| -------------------- | --------------------------------------------------- |
-| `cvmi`               | Show banner with available commands                 |
-| `cvmi add <pkg>`     | Install skills from git repos, URLs, or local paths |
-| `cvmi check`         | Check for available skill updates                   |
-| `cvmi update`        | Update all skills to latest versions                |
-| `cvmi pn` / `cn`     | Compile a server to TypeScript code                 |
-| `cvmi generate-lock` | Match installed skills to sources via API           |
+| Command              | Description                                               |
+| -------------------- | --------------------------------------------------------- |
+| `cvmi`               | Show banner with available commands                       |
+| `cvmi add <pkg>`     | Install skills from git repos, URLs, or local paths       |
+| `cvmi pack`          | Package an MCP server into a distributable `.mcpb` bundle |
+| `cvmi check`         | Check for available skill updates                         |
+| `cvmi update`        | Update all skills to latest versions                      |
+| `cvmi pn` / `cn`     | Compile a server to TypeScript code                       |
+| `cvmi generate-lock` | Match installed skills to sources via API                 |
 
 Aliases: `cvmi a`, `cvmi i`, `cvmi install` all work for `add`.
 
@@ -25,6 +26,8 @@ Aliases: `cvmi a`, `cvmi i`, `cvmi install` all work for `add`.
 src/
 ├── cli.ts           # Main entry point, command routing, init/check/update
 ├── cli.test.ts      # CLI tests
+├── pack.ts          # Pack command implementation
+├── pack/            # Pack utilities (extract, cvm-manifest, pack-init)
 ├── add.ts           # Core add command logic
 ├── add.test.ts      # Add command tests
 ├── cn/              # Client generation (ctxcn) module

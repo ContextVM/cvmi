@@ -12,6 +12,9 @@ import { NostrMCPGateway, PrivateKeySigner, EncryptionMode } from '@contextvm/sd
 import { loadConfig, getServeConfig, DEFAULT_RELAYS } from './config/index.ts';
 import { generatePrivateKey, normalizePrivateKey } from './utils/crypto.ts';
 import { waitForShutdownSignal } from './utils/process.ts';
+import { extractBundle } from './pack/extract.ts';
+import { DEFAULT_CVM_META } from './pack/cvm-manifest.ts';
+import fs from 'fs';
 import { BOLD, DIM, RESET } from './constants/ui.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { savePrivateKeyToEnv } from './config/loader.ts';
@@ -120,13 +123,126 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
   // Priority:
   // - CLI args (positional) override config entirely
   // - otherwise config.url (remote Streamable HTTP) wins over config.command/config.args
-  const target =
+  let target =
     serverArgs.length > 0 ? serverArgs[0] : serveConfig.url ? serveConfig.url : serveConfig.command;
-  const targetArgs = serverArgs.length > 0 ? serverArgs.slice(1) : (serveConfig.args ?? []);
+  let targetArgs = serverArgs.length > 0 ? serverArgs.slice(1) : (serveConfig.args ?? []);
 
   if (!target) {
     showServeHelp();
     process.exit(1);
+  }
+
+  let cleanupPath: string | undefined;
+
+  // Handle .mcpb bundle execution
+  if (target.endsWith('.mcpb')) {
+    p.log.info(`Extracting bundle ${target}...`);
+    try {
+      const { dir, manifest } = await extractBundle(target);
+      cleanupPath = dir;
+
+      // Load CVM config from manifest
+      const meta = manifest._meta?.['com.contextvm'] || DEFAULT_CVM_META;
+      const defaults = meta.defaults || DEFAULT_CVM_META.defaults!;
+      const transport = meta.transport || 'stdio';
+
+      // Resolve command and args from manifest
+      target = manifest.server.mcp_config.command.replace(/\$\{__dirname\}/g, dir);
+      const rawArgs = manifest.server.mcp_config.args || [];
+      targetArgs = rawArgs.map((arg) => arg.replace(/\$\{__dirname\}/g, dir));
+
+      // Merge mcp_config.env into spawn environment (apply ${__dirname} substitution)
+      const manifestEnv = manifest.server.mcp_config.env;
+      if (manifestEnv) {
+        const resolvedManifestEnv: Record<string, string> = {};
+        for (const [key, val] of Object.entries(manifestEnv)) {
+          resolvedManifestEnv[key] = val.replace(/\$\{__dirname\}/g, dir);
+        }
+        Object.assign(serveConfig, {
+          env: { ...(serveConfig.env || {}), ...resolvedManifestEnv },
+        });
+      }
+
+      if (transport === 'cvm') {
+        // ── Native CVM transport ──
+        // The server uses the CVM SDK directly (NostrServerTransport).
+        // We inject config as environment variables per the env_mapping contract.
+        // No Gateway is used.
+
+        const envMapping = meta.env_mapping;
+
+        // Resolve final config values (CLI flags > config file > manifest defaults)
+        const resolvedRelays = options.relays ?? serveConfig.relays ?? defaults.relays;
+        const resolvedEncryption =
+          options.encryption ?? serveConfig.encryption ?? defaults.encryption;
+        const resolvedPublic = options.public ?? serveConfig.public ?? defaults.public;
+        const resolvedPrivateKey = serveConfig.privateKey ?? generatePrivateKey();
+
+        // Build env vars from the mapping
+        const cvmEnv: Record<string, string> = {};
+        if (envMapping?.relays && resolvedRelays) {
+          cvmEnv[envMapping.relays] = Array.isArray(resolvedRelays)
+            ? resolvedRelays.join(',')
+            : resolvedRelays;
+        }
+        if (envMapping?.encryption && resolvedEncryption) {
+          cvmEnv[envMapping.encryption] = resolvedEncryption;
+        }
+        if (envMapping?.public) {
+          cvmEnv[envMapping.public] = String(resolvedPublic ?? false);
+        }
+        if (envMapping?.private_key) {
+          cvmEnv[envMapping.private_key] = normalizePrivateKey(resolvedPrivateKey);
+        }
+
+        p.log.info(`Transport: cvm (native CVM server, no Gateway)`);
+        if (options.verbose) {
+          p.log.message(`Injected env vars: ${Object.keys(cvmEnv).join(', ')}`);
+        }
+
+        // Spawn the server process directly with injected env vars
+        const { spawn } = await import('child_process');
+        const normalized = normalizeCommandAndArgs(target, targetArgs);
+        const child = spawn(normalized.command, normalized.args, {
+          stdio: 'inherit',
+          env: {
+            ...process.env,
+            ...cvmEnv,
+            ...(serveConfig.env || {}),
+          },
+        });
+
+        p.outro(pc.green('CVM native server started. Press Ctrl+C to stop.'));
+
+        const signal = await waitForShutdownSignal();
+        p.log.message(`\n${signal} received. Shutting down...`);
+        child.kill('SIGTERM');
+
+        if (cleanupPath && fs.existsSync(cleanupPath)) {
+          p.log.message(`Cleaning up temporary bundle at ${cleanupPath}`);
+          fs.rmSync(cleanupPath, { recursive: true, force: true });
+        }
+
+        process.exit(0);
+      } else {
+        // ── stdio transport (default) ──
+        // Gateway wraps the process. Apply manifest defaults to serveConfig.
+        if (options.relays === undefined && !config.serve?.relays) {
+          serveConfig.relays = defaults.relays;
+        }
+        if (options.public === undefined && !config.serve?.public) {
+          serveConfig.public = defaults.public;
+        }
+        if (options.encryption === undefined && !config.serve?.encryption) {
+          serveConfig.encryption = defaults.encryption as EncryptionMode;
+        }
+
+        p.log.info(`Transport: stdio (Gateway wraps the server)`);
+      }
+    } catch (error) {
+      p.log.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
   }
 
   // Auto-generate private key if not provided
@@ -227,6 +343,11 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
   p.log.message(`\n${signal} received. Shutting down...`);
   await gateway.stop();
 
+  if (cleanupPath && fs.existsSync(cleanupPath)) {
+    p.log.message(`Cleaning up temporary bundle at ${cleanupPath}`);
+    fs.rmSync(cleanupPath, { recursive: true, force: true });
+  }
+
   process.exit(0);
 }
 
@@ -246,6 +367,8 @@ ${BOLD}Arguments:${RESET}
                             Can also be specified in config file under serve.command
   <mcp-server-url>        If the first argument is an http(s) URL, cvmi will treat it as a Streamable HTTP MCP server
                             and connect via HTTP instead of spawning a local process.
+  <bundle.mcpb>           If the first argument is an .mcpb file, cvmi will extract the bundle,
+                            read the manifest, apply CVM config defaults, and spawn the server.
 
 ${BOLD}Config keys:${RESET}
   serve.url                Optional remote MCP server URL (Streamable HTTP). If set, it is used when no CLI target
@@ -304,6 +427,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi serve https://mcp.server.com ${DIM}# expose a remote Streamable HTTP MCP server over Nostr${RESET}
   ${DIM}$${RESET} cvmi serve npx -y @modelcontextprotocol/server-prompt-generator --public ${DIM}# public server${RESET}
   ${DIM}$${RESET} cvmi serve python /path/to/server.py --relays wss://my-relay.com ${DIM}# custom relay${RESET}
+  ${DIM}$${RESET} cvmi serve my-server-1.0.0.mcpb ${DIM}# run an MCPB bundle over Nostr${RESET}
   ${DIM}$${RESET} cvmi serve --help ${DIM}# show this help${RESET}
   `);
 }
