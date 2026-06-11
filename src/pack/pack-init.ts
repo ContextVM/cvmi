@@ -66,6 +66,7 @@ export async function runPackInit(dir: string): Promise<boolean> {
           options: [
             { value: 'node', label: 'Node.js' },
             { value: 'python', label: 'Python' },
+            { value: 'uv', label: 'Python (UV)' },
             { value: 'binary', label: 'Binary' },
             { value: 'docker', label: 'Docker' },
           ],
@@ -84,7 +85,7 @@ export async function runPackInit(dir: string): Promise<boolean> {
         if (results.type === 'docker') return Promise.resolve(undefined);
         let initial = 'index.js';
         if (results.type === 'node') initial = 'build/index.js';
-        if (results.type === 'python') initial = 'src/server.py';
+        if (results.type === 'python' || results.type === 'uv') initial = 'src/server.py';
         if (results.type === 'binary') initial = 'bin/server';
         return p.text({
           message: 'Entry point path',
@@ -120,7 +121,7 @@ export async function runPackInit(dir: string): Promise<boolean> {
         p.select({
           message: 'Encryption mode',
           options: [
-            { value: 'nip44', label: 'NIP-44 (Required)' },
+            { value: 'required', label: 'Required (NIP-44 encryption)' },
             { value: 'optional', label: 'Optional (Fallback to unencrypted)' },
             { value: 'disabled', label: 'Disabled (Unencrypted)' },
           ],
@@ -146,6 +147,11 @@ export async function runPackInit(dir: string): Promise<boolean> {
     mcpConfig = {
       command: 'docker',
       args: ['run', '--rm', '-i', result.image as string],
+    };
+  } else if (result.type === 'uv') {
+    mcpConfig = {
+      command: 'uv',
+      args: ['run', `\${__dirname}/${result.entryPoint}`],
     };
   } else if (result.type === 'binary') {
     mcpConfig = {

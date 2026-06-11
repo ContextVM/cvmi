@@ -151,6 +151,18 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
       const rawArgs = manifest.server.mcp_config.args || [];
       targetArgs = rawArgs.map((arg) => arg.replace(/\$\{__dirname\}/g, dir));
 
+      // Merge mcp_config.env into spawn environment (apply ${__dirname} substitution)
+      const manifestEnv = manifest.server.mcp_config.env;
+      if (manifestEnv) {
+        const resolvedManifestEnv: Record<string, string> = {};
+        for (const [key, val] of Object.entries(manifestEnv)) {
+          resolvedManifestEnv[key] = val.replace(/\$\{__dirname\}/g, dir);
+        }
+        Object.assign(serveConfig, {
+          env: { ...(serveConfig.env || {}), ...resolvedManifestEnv },
+        });
+      }
+
       if (transport === 'cvm') {
         // ── Native CVM transport ──
         // The server uses the CVM SDK directly (NostrServerTransport).

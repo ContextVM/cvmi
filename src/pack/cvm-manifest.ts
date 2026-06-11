@@ -4,7 +4,7 @@ import { DEFAULT_RELAYS } from '../config/index.ts';
 // CVM-specific defaults for a bundle
 export const CVMDefaultsSchema = z.object({
   relays: z.array(z.string()).default(DEFAULT_RELAYS),
-  encryption: z.enum(['nip44', 'optional', 'disabled']).default('optional'),
+  encryption: z.enum(['required', 'optional', 'disabled']).default('optional'),
   public: z.boolean().default(false),
 });
 
@@ -31,7 +31,7 @@ export const McpbManifestSchema = z
   .object({
     manifest_version: z.string(),
     name: z.string(),
-    display_name: z.string(),
+    display_name: z.string().optional(),
     version: z.string(),
     description: z.string().optional(),
     author: z.object({
@@ -40,13 +40,14 @@ export const McpbManifestSchema = z
       url: z.string().optional(),
     }),
     server: z.object({
-      type: z.enum(['node', 'python', 'binary', 'docker']),
+      type: z.enum(['node', 'python', 'uv', 'binary', 'docker']),
       entry_point: z.string().optional(),
       image: z.string().optional(),
       compose_file: z.string().optional(),
       mcp_config: z.object({
         command: z.string(),
         args: z.array(z.string()).optional(),
+        env: z.record(z.string(), z.string()).optional(),
       }),
     }),
     user_config: z.record(z.string(), z.any()).optional(),
