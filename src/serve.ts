@@ -12,10 +12,18 @@ import { NostrMCPGateway, PrivateKeySigner, EncryptionMode } from '@contextvm/sd
 import { loadConfig, getServeConfig, DEFAULT_RELAYS } from './config/index.ts';
 import { generatePrivateKey, normalizePrivateKey } from './utils/crypto.ts';
 import { waitForShutdownSignal } from './utils/process.ts';
+import { extractBundle } from './pack/extract.ts';
+import fs from 'fs';
 import { BOLD, DIM, RESET } from './constants/ui.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { savePrivateKeyToEnv } from './config/loader.ts';
 import { normalizeCommandAndArgs, splitCommandString } from './utils/command.ts';
+import { computeDirectoryContentHash, verifyManifestSignature } from './pack/crypto.ts';
+import { CONTENT_HASH_IGNORE_PATTERNS } from './pack/constants.ts';
+
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -120,13 +128,204 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
   // Priority:
   // - CLI args (positional) override config entirely
   // - otherwise config.url (remote Streamable HTTP) wins over config.command/config.args
-  const target =
+  let target =
     serverArgs.length > 0 ? serverArgs[0] : serveConfig.url ? serveConfig.url : serveConfig.command;
-  const targetArgs = serverArgs.length > 0 ? serverArgs.slice(1) : (serveConfig.args ?? []);
+  let targetArgs = serverArgs.length > 0 ? serverArgs.slice(1) : (serveConfig.args ?? []);
 
   if (!target) {
     showServeHelp();
     process.exit(1);
+  }
+
+  let cleanupPath: string | undefined;
+
+  // Handle .cvmb / .mcpb bundle execution
+  if (target.endsWith('.cvmb') || target.endsWith('.mcpb')) {
+    p.log.info(`Extracting bundle ${target}...`);
+    // Tracks whether the extracted dir has been handed off to the long-lived
+    // gateway (stdio transport). When true, the `finally` below must NOT remove
+    // it — end-of-function cleanup + the `exit` hook own its lifecycle instead.
+    let handedOffToGateway = false;
+    try {
+      const { dir, manifest } = await extractBundle(target);
+      cleanupPath = dir;
+      // Synchronous backstop: guarantees cleanup on crashes / unexpected exits
+      // that bypass the `finally` (e.g. uncaught throws, process.exit()).
+      process.on('exit', () => {
+        if (cleanupPath && fs.existsSync(cleanupPath)) {
+          fs.rmSync(cleanupPath, { recursive: true, force: true });
+        }
+      });
+
+      // 1. Content Hash Verification
+      const expectedHash = manifest._meta?.['com.contextvm']?.content_hash;
+      if (expectedHash) {
+        const actualHash = await computeDirectoryContentHash(dir, CONTENT_HASH_IGNORE_PATTERNS);
+        if (actualHash !== expectedHash) {
+          throw new Error(
+            'Content hash verification failed! The bundle contents have been modified.'
+          );
+        }
+      } else {
+        p.log.warn('No content hash found in manifest. Bundle integrity cannot be verified.');
+      }
+
+      // 2. Signature Verification
+      if (manifest._sig) {
+        verifyManifestSignature(manifest);
+        p.log.success(`Signature verified. Author: ${manifest._sig.pubkey.slice(0, 8)}...`);
+      } else {
+        p.log.warn('No cryptographic signature found. You are running unverified code.');
+        const proceed = await p.confirm({
+          message: 'Do you want to proceed anyway?',
+          initialValue: false,
+        });
+        if (!proceed) process.exit(1);
+      }
+
+      // 3. User Configuration Prompting
+      const userConfigValues: Record<string, any> = {};
+      if (manifest.user_config) {
+        for (const [key, field] of Object.entries(manifest.user_config)) {
+          // Check if env var already satisfies this
+          const existingEnv = process.env[key.toUpperCase()];
+          if (existingEnv !== undefined) {
+            userConfigValues[key] = existingEnv;
+            continue;
+          }
+
+          if (field.type === 'boolean') {
+            userConfigValues[key] = await p.confirm({
+              message: field.title || key,
+              initialValue: field.default ?? false,
+            });
+          } else {
+            const promptMethod = field.sensitive ? p.password : p.text;
+            userConfigValues[key] = await promptMethod({
+              message: `${field.title || key}${field.description ? ` (${field.description})` : ''}`,
+              initialValue: field.default?.toString(),
+              validate: (val) => {
+                if (field.required && !val) return 'This field is required.';
+              },
+            });
+          }
+
+          if (p.isCancel(userConfigValues[key])) {
+            p.cancel('Setup cancelled.');
+            process.exit(0);
+          }
+        }
+      }
+
+      // 4. Resolve command and args from manifest
+      target = manifest.server.mcp_config.command.replace(/\$\{__dirname\}/g, dir);
+      const rawArgs = manifest.server.mcp_config.args || [];
+      targetArgs = rawArgs.map((arg: string) => {
+        let resolved = arg.replace(/\$\{__dirname\}/g, dir);
+        // Replace ${user_config.X} in args
+        for (const [key, val] of Object.entries(userConfigValues)) {
+          resolved = resolved.replace(
+            new RegExp(`\\$\\{user_config\\.${escapeRegExp(key)}\\}`, 'g'),
+            String(val)
+          );
+        }
+        return resolved;
+      });
+
+      // 5. Merge mcp_config.env into spawn environment
+      const manifestEnv = manifest.server.mcp_config.env;
+      const resolvedManifestEnv: Record<string, string> = {};
+      if (manifestEnv) {
+        for (const [key, val] of Object.entries(manifestEnv)) {
+          let resolved = (val as string).replace(/\$\{__dirname\}/g, dir);
+          // Replace ${user_config.X}
+          for (const [cfgKey, cfgVal] of Object.entries(userConfigValues)) {
+            resolved = resolved.replace(
+              new RegExp(`\\$\\{user_config\\.${escapeRegExp(cfgKey)}\\}`, 'g'),
+              String(cfgVal)
+            );
+          }
+          resolvedManifestEnv[key] = resolved;
+        }
+        Object.assign(serveConfig, {
+          env: { ...(serveConfig.env || {}), ...resolvedManifestEnv },
+        });
+      }
+
+      const transport = manifest.server.transport || 'stdio';
+
+      if (transport === 'cvm') {
+        // ── Native CVM transport ──
+        p.log.info(`Transport: cvm (native CVM server, no Gateway)`);
+
+        // We ensure standard CVM vars are set if user_config resolved them
+        const cvmEnv = {
+          ...process.env,
+          ...(serveConfig.env || {}),
+        };
+
+        if (options.verbose) {
+          p.log.message(
+            `Injected env vars from bundle: ${Object.keys(resolvedManifestEnv).join(', ')}`
+          );
+        }
+
+        const { spawn } = await import('child_process');
+        const normalized = normalizeCommandAndArgs(target, targetArgs);
+        const child = spawn(normalized.command, normalized.args, {
+          stdio: 'inherit',
+          env: cvmEnv,
+        });
+
+        p.outro(pc.green('CVM native server started. Press Ctrl+C to stop.'));
+
+        const signal = await waitForShutdownSignal();
+        p.log.message(`\n${signal} received. Shutting down...`);
+        child.kill('SIGTERM');
+
+        // The `finally` block cleans up the extracted bundle dir on exit.
+        process.exit(0);
+      } else {
+        // ── stdio transport (default) ──
+        p.log.info(`Transport: stdio (Gateway wraps the server)`);
+
+        // If the bundle user_config provided typical CVM fields, use them to configure gateway
+        if (options.relays === undefined && !config.serve?.relays && userConfigValues.relays) {
+          serveConfig.relays = String(userConfigValues.relays)
+            .split(',')
+            .map((r) => r.trim());
+        }
+        if (
+          options.public === undefined &&
+          !config.serve?.public &&
+          userConfigValues.public !== undefined
+        ) {
+          serveConfig.public = Boolean(userConfigValues.public);
+        }
+        if (
+          options.encryption === undefined &&
+          !config.serve?.encryption &&
+          userConfigValues.encryption
+        ) {
+          serveConfig.encryption = userConfigValues.encryption as EncryptionMode;
+        }
+      }
+
+      // The extracted bundle dir is now owned by the gateway spawned below; it
+      // must persist until the gateway shuts down, so keep `finally` from
+      // removing it prematurely. (The cvm branch exits before reaching here.)
+      handedOffToGateway = true;
+    } catch (error) {
+      p.log.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    } finally {
+      // Guaranteed cleanup for the cvm runtime path and any setup error.
+      // The stdio path is skipped (dir handed off to the gateway below).
+      if (cleanupPath && !handedOffToGateway) {
+        p.log.message(`Cleaning up temporary bundle at ${cleanupPath}`);
+        fs.rmSync(cleanupPath, { recursive: true, force: true });
+      }
+    }
   }
 
   // Auto-generate private key if not provided
@@ -227,6 +426,11 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
   p.log.message(`\n${signal} received. Shutting down...`);
   await gateway.stop();
 
+  if (cleanupPath && fs.existsSync(cleanupPath)) {
+    p.log.message(`Cleaning up temporary bundle at ${cleanupPath}`);
+    fs.rmSync(cleanupPath, { recursive: true, force: true });
+  }
+
   process.exit(0);
 }
 
@@ -246,6 +450,8 @@ ${BOLD}Arguments:${RESET}
                             Can also be specified in config file under serve.command
   <mcp-server-url>        If the first argument is an http(s) URL, cvmi will treat it as a Streamable HTTP MCP server
                             and connect via HTTP instead of spawning a local process.
+  <bundle.cvmb>           If the first argument is an .cvmb file, cvmi will extract the bundle,
+                            read the manifest, apply CVM config defaults, and spawn the server.
 
 ${BOLD}Config keys:${RESET}
   serve.url                Optional remote MCP server URL (Streamable HTTP). If set, it is used when no CLI target
@@ -304,6 +510,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi serve https://mcp.server.com ${DIM}# expose a remote Streamable HTTP MCP server over Nostr${RESET}
   ${DIM}$${RESET} cvmi serve npx -y @modelcontextprotocol/server-prompt-generator --public ${DIM}# public server${RESET}
   ${DIM}$${RESET} cvmi serve python /path/to/server.py --relays wss://my-relay.com ${DIM}# custom relay${RESET}
+  ${DIM}$${RESET} cvmi serve my-server-1.0.0.cvmb ${DIM}# run a CVMB bundle over Nostr${RESET}
   ${DIM}$${RESET} cvmi serve --help ${DIM}# show this help${RESET}
   `);
 }
