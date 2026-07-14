@@ -15,13 +15,14 @@ import { join, dirname, basename } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { ensureWebSocket, type EncryptionMode } from '@contextvm/sdk';
+import type { PaymentInteractionMode } from '@contextvm/sdk/payments';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
 import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { track } from './telemetry.ts';
 import { serve, showServeHelp } from './serve.ts';
 import { showUseHelp, use } from './use.ts';
-import { call, parseCallArgs, showCallHelp } from './call.ts';
+import { call, parseCallArgs, showCallHelp, ExplicitGatingError } from './call.ts';
 import { discover, parseDiscoverArgs, showDiscoverHelp } from './discover.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { runCn } from './cn/index.ts';
@@ -717,6 +718,7 @@ interface UseParseResult {
   encryption: EncryptionMode | undefined;
   config: string | undefined;
   persistPrivateKey: boolean;
+  paymentMode: PaymentInteractionMode;
   unknownFlags: string[];
 }
 
@@ -839,6 +841,7 @@ function parseUseArgs(args: string[]): UseParseResult {
     encryption: undefined,
     config: undefined,
     persistPrivateKey: false,
+    paymentMode: 'explicit_gating',
     unknownFlags: [],
   };
 
@@ -870,6 +873,13 @@ function parseUseArgs(args: string[]): UseParseResult {
     } else if (arg === '--encryption-mode') {
       const value = consumeValue('--encryption-mode');
       result.encryption = parseEncryptionMode(value, 'CLI flag --encryption-mode');
+    } else if (arg === '--payment-mode') {
+      const value = consumeValue('--payment-mode');
+      if (value === 'transparent' || value === 'explicit_gating') {
+        result.paymentMode = value;
+      } else {
+        result.unknownFlags.push(`--payment-mode${value ? ` (${value})` : ''}`);
+      }
     } else if (arg === '--server-pubkey') {
       result.serverPubkey = consumeValue('--server-pubkey');
     } else if (arg === '--config') {
@@ -1011,6 +1021,7 @@ async function main(): Promise<void> {
         encryption: parsed.encryption,
         config: parsed.config,
         persistPrivateKey: parsed.persistPrivateKey,
+        paymentMode: parsed.paymentMode,
       });
       break;
     }
@@ -1052,18 +1063,27 @@ async function main(): Promise<void> {
         break;
       }
 
-      await call(parsed.server, parsed.capability, parsed.input, {
-        debug: parsed.debug,
-        verbose: parsed.verbose,
-        raw: parsed.raw,
-        help: parsed.help,
-        showServerDetails: parsed.showServerDetails,
-        privateKey: parsed.privateKey,
-        relays: parsed.relays,
-        encryption: parsed.encryption,
-        isStateless: parsed.isStateless,
-        config: parsed.config,
-      });
+      try {
+        await call(parsed.server, parsed.capability, parsed.input, {
+          debug: parsed.debug,
+          verbose: parsed.verbose,
+          raw: parsed.raw,
+          help: parsed.help,
+          showServerDetails: parsed.showServerDetails,
+          privateKey: parsed.privateKey,
+          relays: parsed.relays,
+          encryption: parsed.encryption,
+          isStateless: parsed.isStateless,
+          config: parsed.config,
+          paymentMode: parsed.paymentMode,
+        });
+      } catch (error) {
+        if (error instanceof ExplicitGatingError) {
+          console.log(JSON.stringify(error.data, null, 2));
+          process.exit(2);
+        }
+        throw error;
+      }
       process.exit(0);
       break;
     }

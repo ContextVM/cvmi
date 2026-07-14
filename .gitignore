@@ -37,3 +37,6 @@ ts-sdk
 gateway-cli
 proxy-cli
 # sdk
+
+# per-developer MCP client config (local test rigs)
+.mcp.json

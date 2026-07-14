@@ -19,6 +19,7 @@ export {
 export type {
   ServeConfig,
   ServeJsonConfig,
+  ServePaymentsConfig,
   UseConfig,
   UseJsonConfig,
   ServerTargetConfig,

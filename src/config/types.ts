@@ -2,7 +2,19 @@
  * Simplified configuration types for cvmi CLI.
  * Uses SDK types directly where possible.
  */
-import type { ServerInfo, EncryptionMode } from '@contextvm/sdk';
+import type { ServerInfo, EncryptionMode, ServerPaymentsOptions } from '@contextvm/sdk';
+
+/**
+ * CEP-8 server-side payments for the serve gateway. Derives from the SDK's
+ * `ServerPaymentsOptions`, replacing the `processors` instances (not serializable)
+ * with the NWC connection string; cvmi bundles the NWC payment processor from it.
+ * All other SDK options (pricedCapabilities, paymentInteraction, resolvePrice, …)
+ * pass straight through.
+ */
+export type ServePaymentsConfig = Omit<ServerPaymentsOptions, 'processors'> & {
+  /** NIP-47 `nostr+walletconnect://...` connection string. Override with CVMI_SERVE_PAYMENT_NWC. */
+  nwc: string;
+};
 
 /**
  * Configuration for the serve command (gateway).
@@ -29,6 +41,8 @@ export interface ServeConfig {
   env?: Record<string, string>;
   /** Optional remote MCP server URL (Streamable HTTP). Mutually exclusive with command/args. */
   url?: string;
+  /** Optional CEP-8 server-side payments. Omit for a free (non-gated) server. */
+  payments?: ServePaymentsConfig;
 }
 
 /**

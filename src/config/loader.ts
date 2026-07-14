@@ -256,6 +256,7 @@ export function getServeConfig(
     command: cliFlags.command ?? config.command,
     args: cliFlags.args ?? config.args,
     env: cliFlags.env ?? config.env,
+    payments: cliFlags.payments ?? config.payments,
   };
 }
 

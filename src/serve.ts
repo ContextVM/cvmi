@@ -8,14 +8,52 @@ import {
   StdioClientTransport,
 } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { NostrMCPGateway, PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
+import {
+  NostrMCPGateway,
+  PrivateKeySigner,
+  EncryptionMode,
+  LnBolt11NwcPaymentProcessor,
+} from '@contextvm/sdk';
+import type { ServerPaymentsOptions } from '@contextvm/sdk';
 import { loadConfig, getServeConfig, DEFAULT_RELAYS } from './config/index.ts';
+import type { ServePaymentsConfig } from './config/index.ts';
 import { generatePrivateKey, normalizePrivateKey } from './utils/crypto.ts';
 import { waitForShutdownSignal } from './utils/process.ts';
 import { BOLD, DIM, RESET } from './constants/ui.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { savePrivateKeyToEnv } from './config/loader.ts';
 import { normalizeCommandAndArgs, splitCommandString } from './utils/command.ts';
+
+/**
+ * Build SDK `ServerPaymentsOptions` from cvmi's config: bundle the NWC payment
+ * processor from the connection string and pass all other SDK options
+ * (pricedCapabilities, paymentInteraction, …) straight through.
+ */
+function buildNwcPaymentOptions(payments: ServePaymentsConfig): ServerPaymentsOptions {
+  const { nwc, ...rest } = payments;
+  return {
+    ...rest,
+    processors: [new LnBolt11NwcPaymentProcessor({ nwcConnectionString: nwc })],
+  };
+}
+
+/**
+ * Resolve `serve.payments` into SDK `ServerPaymentsOptions`, or `undefined` for a
+ * free (non-gated) server. Applies the `CVMI_SERVE_PAYMENT_NWC` env override and
+ * guards a missing nwc connection string; only fires when payments are configured,
+ * so payment-free serves are unaffected.
+ */
+function resolvePaymentOptions(
+  payments: ServePaymentsConfig | undefined,
+  nwcEnv: string | undefined
+): ServerPaymentsOptions | undefined {
+  if (!payments) return undefined;
+  const resolved = nwcEnv ? { ...payments, nwc: nwcEnv } : payments;
+  if (!resolved.nwc) {
+    throw new Error('serve.payments.nwc is required (or set CVMI_SERVE_PAYMENT_NWC).');
+  }
+  return buildNwcPaymentOptions(resolved);
+}
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -77,6 +115,8 @@ export const __test__ = {
   splitCommandString,
   normalizeCommandAndArgs,
   getDefaultEnvironment,
+  buildNwcPaymentOptions,
+  resolvePaymentOptions,
 };
 
 /** CLI options for the serve command */
@@ -164,6 +204,11 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
     p.log.message(`Relays: ${relays.join(', ')}`);
     p.log.message(`Public server: ${serveConfig.public ? 'yes' : 'no'}`);
     p.log.message(`Starting MCP target: ${target} ${targetArgs.join(' ')}`);
+    if (serveConfig.payments) {
+      p.log.message(
+        `Payments: enabled (${serveConfig.payments.pricedCapabilities.length} priced capability/ies)`
+      );
+    }
   }
 
   const logLevel: 'debug' | 'info' = options.verbose ? 'debug' : 'info';
@@ -183,6 +228,13 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
   // - Streamable HTTP targets: per-client MCP transports (HTTP transport caches mcp-session-id)
   let gateway: NostrMCPGateway;
   try {
+    // CEP-8 server payments. CVMI_SERVE_PAYMENT_NWC overrides the config nwc
+    // (wallet secret). Missing nwc throws here and surfaces via the catch below.
+    const paymentOptions = resolvePaymentOptions(
+      serveConfig.payments,
+      process.env.CVMI_SERVE_PAYMENT_NWC
+    );
+
     if (isHttpUrl(target)) {
       if (targetArgs.length > 0) {
         // In HTTP mode, extra args are ambiguous and almost certainly a user error.
@@ -205,12 +257,14 @@ export async function serve(serverArgs: string[], options: ServeOptions): Promis
           createStreamableHttpMcpTransport(target),
         announcementMcpTransport: announcementTransport,
         nostrTransportOptions,
+        paymentOptions,
       });
     } else {
       const normalized = normalizeCommandAndArgs(target, targetArgs);
       gateway = new NostrMCPGateway({
         mcpClientTransport: createStdioMcpTransport(normalized.command, normalized.args, mcpEnv),
         nostrTransportOptions,
+        paymentOptions,
       });
     }
   } catch (error) {
@@ -275,6 +329,7 @@ ${BOLD}Configuration Sources (priority: CLI > custom config (--config) > project
     CVMI_SERVE_PUBLIC, CVMI_GATEWAY_PUBLIC
     CVMI_SERVE_ENCRYPTION, CVMI_GATEWAY_ENCRYPTION
     CVMI_SERVE_URL, CVMI_GATEWAY_URL
+    CVMI_SERVE_PAYMENT_NWC     NIP-47 wallet connection for serve.payments (overrides config)
 
 ${BOLD}SDK Logging (set via environment, not config files):${RESET}
     LOG_LEVEL (debug|info|warn|error|silent)
@@ -294,6 +349,25 @@ ${BOLD}SDK Logging (set via environment, not config files):${RESET}
       "encryption": "optional"
     }
   }
+
+  Paid server (CEP-8): gate proxied tools behind Lightning payments via a
+  bundled NWC (NIP-47) payment processor. cvmi bundles the NWC processor from
+  the connection string; all other SDK options pass straight through.
+  {
+    "serve": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "payments": {
+        "nwc": "nostr+walletconnect://...",
+        "paymentInteraction": "optional",
+        "pricedCapabilities": [
+          { "method": "tools/call", "name": "read_file", "amount": 2, "currencyUnit": "sats" }
+        ]
+      }
+    }
+  }
+  Override nwc at runtime with CVMI_SERVE_PAYMENT_NWC (keeps the secret out of config).
+  paymentInteraction: optional (default, mirrors each client) | transparent.
 
   .env file format (for private keys):
     CVMI_SERVE_PRIVATE_KEY=nsec1...

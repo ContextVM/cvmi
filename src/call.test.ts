@@ -9,6 +9,7 @@ import {
   setCreateRemoteClientFactoryForTests,
 } from './call.ts';
 import { stripAnsi } from './test-utils.ts';
+import { PAYMENT_REQUIRED_ERROR_CODE } from '@contextvm/sdk/payments/constants';
 
 function captureConsoleOutput(render: () => void): string[] {
   const output: string[] = [];
@@ -73,10 +74,24 @@ describe('parseCallArgs', () => {
     expect(parsed.encryption).toBe(EncryptionMode.REQUIRED);
     expect(parsed.isStateless).toBe(false);
     expect(parsed.showServerDetails).toBe(false);
-    expect(parsed.unknownFlags).toEqual([]);
+    expect(parsed.paymentMode).toBe('transparent');
   });
 
-  it('parses server details flag explicitly', () => {
+  it('parses --payment-mode flag', () => {
+    const transparent = parseCallArgs(['server', '--payment-mode', 'transparent']);
+    expect(transparent.paymentMode).toBe('transparent');
+
+    const explicit = parseCallArgs(['server', '--payment-mode', 'explicit_gating']);
+    expect(explicit.paymentMode).toBe('explicit_gating');
+  });
+
+  it('rejects invalid --payment-mode flag', () => {
+    const invalid = parseCallArgs(['server', '--payment-mode', 'invalid_mode']);
+    expect(invalid.paymentMode).toBe('transparent'); // defaults to transparent
+    expect(invalid.unknownFlags).toEqual(['--payment-mode (invalid_mode)']);
+  });
+
+  it('parses flags intermixed with kv pairs', () => {
     const parsed = parseCallArgs(['weather', '--details']);
 
     expect(parsed.server).toBe('weather');
@@ -594,6 +609,10 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
           listTools,
           callTool,
         },
+        transport: {
+          getServerToolsListEvent: () => undefined,
+          getServerInitializeEvent: () => undefined,
+        },
         metadata: {},
         close,
       }) as never
@@ -833,6 +852,45 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
     resetCreateRemoteClientFactoryForTests();
   });
 
+  it('throws ExplicitGatingError for -32042 in explicit_gating mode', async () => {
+    const listTools = vi.fn().mockResolvedValue({ tools: [] });
+    const mockError = new Error('Payment Required') as any;
+    mockError.code = PAYMENT_REQUIRED_ERROR_CODE;
+    mockError.data = { foo: 'bar' };
+    const callTool = vi.fn().mockRejectedValue(mockError);
+    const close = vi.fn().mockResolvedValue(undefined);
+
+    setCreateRemoteClientFactoryForTests(
+      vi.fn().mockResolvedValue({
+        client: { listTools, callTool },
+        metadata: {},
+        close,
+      }) as never
+    );
+
+    let error: any;
+    try {
+      await call(
+        '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+        'read_media_file',
+        {},
+        {
+          privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h',
+          paymentMode: 'explicit_gating',
+        }
+      );
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeDefined();
+    expect(error.name).toBe('ExplicitGatingError');
+    expect(error.data).toEqual({ foo: 'bar' });
+    expect(close).toHaveBeenCalled();
+
+    resetCreateRemoteClientFactoryForTests();
+  });
+
   it('prints extracted string values without JSON encoding', async () => {
     const listTools = vi.fn().mockResolvedValue({
       tools: [
@@ -881,5 +939,24 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
     expect(output).toContain('aGVsbG8=');
 
     resetCreateRemoteClientFactoryForTests();
+  });
+
+  describe('isPaymentRequiredError', () => {
+    it('returns true for an error with code -32042', () => {
+      const error = new Error('Payment Required') as any;
+      error.code = PAYMENT_REQUIRED_ERROR_CODE;
+      expect(__test__.isPaymentRequiredError(error)).toBe(true);
+    });
+
+    it('returns false for non-error objects', () => {
+      expect(__test__.isPaymentRequiredError({ code: PAYMENT_REQUIRED_ERROR_CODE })).toBe(false);
+      expect(__test__.isPaymentRequiredError(null)).toBe(false);
+    });
+
+    it('returns false for other error codes', () => {
+      const error = new Error('Other Error') as any;
+      error.code = -32601;
+      expect(__test__.isPaymentRequiredError(error)).toBe(false);
+    });
   });
 });

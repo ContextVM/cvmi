@@ -12,11 +12,31 @@ import {
 } from './config/index.ts';
 import type { CvmiConfig, ServerTargetConfig } from './config/index.ts';
 import { generatePrivateKey, normalizePrivateKey, normalizePublicKey } from './utils/crypto.ts';
-import { BOLD, CYAN, DIM, RESET, TEXT } from './constants/ui.ts';
+import { BOLD, CYAN, DIM, RESET, TEXT, YELLOW } from './constants/ui.ts';
 import { renderDefaultResult } from './call/render-result.ts';
 import { renderSchemaProperties, renderToolSchema } from './call/render-schema.ts';
+import {
+  parseCapabilityPricing,
+  formatPrice,
+  PRICING_FOOTNOTE,
+  type CapabilityPricing,
+} from './call/pricing.ts';
+import { withClientPayments } from '@contextvm/sdk/payments';
+import type { PaymentInteractionMode } from '@contextvm/sdk/payments';
+import {
+  paymentRequiredNotificationSchema,
+  renderPaymentRequired,
+} from './payments/cli-payment-handler.ts';
+import { PAYMENT_REQUIRED_ERROR_CODE } from '@contextvm/sdk/payments/constants';
 
 const HEX_PUBKEY_PATTERN = /^[0-9a-f]{64}$/i;
+
+export class ExplicitGatingError extends Error {
+  constructor(public readonly data: any) {
+    super('Payment Required');
+    this.name = 'ExplicitGatingError';
+  }
+}
 
 function looksLikeDirectServerIdentity(input: string): boolean {
   return (
@@ -37,6 +57,7 @@ export interface CallOptions {
   prettyRaw?: boolean;
   extract?: string;
   help?: boolean;
+  paymentMode?: PaymentInteractionMode;
 }
 
 export interface ParseCallResult {
@@ -56,6 +77,7 @@ export interface ParseCallResult {
   showServerDetails: boolean;
   config: string | undefined;
   unknownFlags: string[];
+  paymentMode: PaymentInteractionMode;
 }
 
 interface ResolvedServerTarget {
@@ -118,6 +140,7 @@ export function parseCallArgs(args: string[]): ParseCallResult {
     showServerDetails: false,
     config: undefined,
     unknownFlags: [],
+    paymentMode: 'transparent',
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -167,6 +190,13 @@ export function parseCallArgs(args: string[]): ParseCallResult {
       result.isStateless = false;
     } else if (arg === '--details') {
       result.showServerDetails = true;
+    } else if (arg === '--payment-mode') {
+      const value = consumeValue('--payment-mode');
+      if (value === 'transparent' || value === 'explicit_gating') {
+        result.paymentMode = value;
+      } else {
+        result.unknownFlags.push(`--payment-mode${value ? ` (${value})` : ''}`);
+      }
     } else if (arg.startsWith('--')) {
       result.unknownFlags.push(arg);
     } else if (!result.server) {
@@ -446,7 +476,7 @@ function resolveServerMetadataContext(
   return target.description ?? metadata?.about;
 }
 
-function renderToolList(tools: Tool[]): void {
+function renderToolList(tools: Tool[], pricing?: CapabilityPricing): void {
   if (tools.length === 0) {
     console.log(`  ${DIM}(no tools exposed)${RESET}`);
     return;
@@ -454,9 +484,12 @@ function renderToolList(tools: Tool[]): void {
 
   for (const tool of tools) {
     const signature = formatToolInputSignature(tool);
-    console.log(
-      `  ${CYAN}•${RESET} ${tool.name}${signature ? ` ${DIM}${signature}${RESET}` : ''}${tool.description ? ` ${DIM}— ${tool.description}${RESET}` : ''}`
-    );
+    const price = pricing?.byTool.get(tool.name);
+    const parts = [`  ${CYAN}•${RESET} ${tool.name}`];
+    if (signature) parts.push(` ${DIM}${signature}${RESET}`);
+    if (tool.description) parts.push(` ${DIM}— ${tool.description}${RESET}`);
+    if (price) parts.push(` ${YELLOW}(${formatPrice(price)})${RESET}`);
+    console.log(parts.join(''));
   }
 }
 
@@ -478,9 +511,22 @@ export const __test__ = {
   printServerHelp,
   printToolHelp,
   printAliasSummaries,
+  isPaymentRequiredError,
 };
 
 type RemoteClientFactory = typeof createRemoteClient;
+type RemoteClient = Awaited<ReturnType<typeof createRemoteClient>>;
+
+/** List tools + advertised pricing in one round-trip; always fetched together. */
+async function discoverTools(
+  remote: RemoteClient
+): Promise<{ tools: Tool[]; pricing: CapabilityPricing }> {
+  const toolsResult = await remote.client.listTools();
+  const pricing = parseCapabilityPricing(
+    remote.transport.getServerToolsListEvent() ?? remote.transport.getServerInitializeEvent()
+  );
+  return { tools: toolsResult.tools, pricing };
+}
 
 let createRemoteClientFactory: RemoteClientFactory = createRemoteClient;
 
@@ -511,11 +557,22 @@ async function createRemoteClient(target: ResolvedServerTarget, options: CallOpt
     logLevel: options.debug ? 'debug' : 'silent',
   });
 
+  // PMI-agnostic: advertise no handlers, so the server sends
+  // `payment_required` for whatever rail it supports (CEP-8 no-client-PMI
+  // path). The invoice is rendered upstream via setNotificationHandler.
+  const paidTransport = withClientPayments(transport, {
+    paymentInteraction: options.paymentMode ?? 'transparent',
+  });
+
   const client = new Client({ name: 'cvmi', version: '0.1.0' });
-  await client.connect(transport);
+  client.setNotificationHandler(paymentRequiredNotificationSchema, (notification) =>
+    renderPaymentRequired(notification.params)
+  );
+  await client.connect(paidTransport);
 
   return {
     client,
+    transport,
     metadata: {
       name: transport.getServerInitializeName(),
       about: transport.getServerInitializeAbout(),
@@ -533,7 +590,8 @@ function printServerSummary(
   target: ResolvedServerTarget,
   tools: Tool[],
   metadata?: ServerMetadata,
-  options: Pick<CallOptions, 'showServerDetails'> = {}
+  options: Pick<CallOptions, 'showServerDetails'> = {},
+  pricing?: CapabilityPricing
 ): void {
   const shouldShowDetails = options.showServerDetails === true;
   const primaryLabel = resolveServerMetadataLabel(target, metadata);
@@ -544,6 +602,10 @@ function printServerSummary(
 
   if (primaryContext) {
     printSummaryRow('About', primaryContext);
+  }
+
+  if (pricing && pricing.pmis.length > 0) {
+    printSummaryRow('Payments', pricing.pmis.join(', '));
   }
 
   if (shouldShowDetails) {
@@ -564,19 +626,23 @@ function printServerSummary(
   }
 
   console.log();
-  renderToolList(tools);
+  renderToolList(tools, pricing);
+  if (pricing && pricing.byTool.size > 0) {
+    console.log(`  ${DIM}${PRICING_FOOTNOTE}${RESET}`);
+  }
 }
 
 function printServerHelp(
   target: ResolvedServerTarget,
   tools: Tool[],
   metadata?: ServerMetadata,
-  options: Pick<CallOptions, 'showServerDetails'> = {}
+  options: Pick<CallOptions, 'showServerDetails'> = {},
+  pricing?: CapabilityPricing
 ): void {
   printSection('Usage');
   console.log(`  cvmi call <server> <tool> [key=value ...] [options]`);
   console.log();
-  printServerSummary(target, tools, metadata, options);
+  printServerSummary(target, tools, metadata, options, pricing);
   console.log();
   printSection('Invoke');
   console.log(
@@ -601,11 +667,19 @@ function printAliasSummaries(aliases: CompactAliasSummary[]): void {
   console.log();
 }
 
-function printToolHelp(target: ResolvedServerTarget, tool: Tool): void {
+function printToolHelp(
+  target: ResolvedServerTarget,
+  tool: Tool,
+  pricing?: CapabilityPricing
+): void {
   printSection('Usage');
   console.log(`  cvmi call ${target.input} ${tool.name} [key=value ...] [options]`);
   if (tool.description) {
     console.log(`  ${tool.description}`);
+  }
+  const price = pricing?.byTool.get(tool.name);
+  if (price) {
+    console.log(`  ${YELLOW}${formatPrice(price)}${RESET} ${DIM}— ${PRICING_FOOTNOTE}${RESET}`);
   }
   console.log();
   printSection('Input');
@@ -697,7 +771,8 @@ function printMissingToolGuidance(
   capabilityArg: string,
   tools: Tool[],
   metadata?: ServerMetadata,
-  options: Pick<CallOptions, 'showServerDetails'> = {}
+  options: Pick<CallOptions, 'showServerDetails'> = {},
+  pricing?: CapabilityPricing
 ): void {
   console.error(
     buildMissingToolError(
@@ -707,7 +782,7 @@ function printMissingToolGuidance(
     ).message
   );
   console.error();
-  printServerHelp(target, tools, metadata, options);
+  printServerHelp(target, tools, metadata, options, pricing);
 }
 
 function isMissingToolInvocationError(error: unknown): boolean {
@@ -718,12 +793,25 @@ function isMissingToolInvocationError(error: unknown): boolean {
   return /tool.+not found|unknown tool|method not found|-32601/i.test(error.message);
 }
 
+function isPaymentRequiredError(error: unknown): boolean {
+  // CEP-8 Payment Required JSON-RPC error code
+  return (
+    error instanceof Error && 'code' in error && (error as any).code === PAYMENT_REQUIRED_ERROR_CODE
+  );
+}
+
 export async function call(
   serverArg: string | undefined,
   capabilityArg: string | undefined,
   input: Record<string, unknown>,
   options: CallOptions
 ): Promise<void> {
+  // LOG_ENABLED isn't set here: the SDK logger is an import-time singleton, so
+  // a runtime assignment is a no-op. The client-payments info logs that used
+  // to bracket the invoice only fired on the handler path we no longer take
+  // (PMI-agnostic now), so they're gone. An SDK `logLevel` option on
+  // withClientPayments would be the clean fix if other info logs surface.
+
   const config = await loadConfig(
     {
       use: {
@@ -752,28 +840,21 @@ export async function call(
   try {
     if (!capabilityArg) {
       logVerbose(options.verbose, 'Discovering tools...');
-      const toolsResult = await remote.client.listTools();
-      const tools = toolsResult.tools;
-      printServerHelp(target, tools, remote.metadata, options);
+      const { tools, pricing } = await discoverTools(remote);
+      printServerHelp(target, tools, remote.metadata, options, pricing);
       return;
     }
 
     const toolName = resolveToolName(capabilityArg);
     if (options.help) {
       logVerbose(options.verbose, 'Discovering tools...');
-      const toolsResult = await remote.client.listTools();
-      const tool = toolsResult.tools.find((entry) => entry.name === toolName);
+      const { tools, pricing } = await discoverTools(remote);
+      const tool = tools.find((entry) => entry.name === toolName);
       if (!tool) {
-        printMissingToolGuidance(
-          target,
-          capabilityArg,
-          toolsResult.tools,
-          remote.metadata,
-          options
-        );
+        printMissingToolGuidance(target, capabilityArg, tools, remote.metadata, options, pricing);
         process.exit(1);
       }
-      printToolHelp(target, tool);
+      printToolHelp(target, tool, pricing);
       return;
     }
 
@@ -793,12 +874,15 @@ export async function call(
       );
     } catch (error) {
       if (!isMissingToolInvocationError(error)) {
+        if (options.paymentMode === 'explicit_gating' && isPaymentRequiredError(error)) {
+          throw new ExplicitGatingError((error as any).data);
+        }
         throw error;
       }
 
       logVerbose(options.verbose, 'Discovering tools...');
-      const toolsResult = await remote.client.listTools();
-      printMissingToolGuidance(target, capabilityArg, toolsResult.tools, remote.metadata, options);
+      const { tools, pricing } = await discoverTools(remote);
+      printMissingToolGuidance(target, capabilityArg, tools, remote.metadata, options, pricing);
       process.exit(1);
     }
 
@@ -845,6 +929,7 @@ ${BOLD}Options:${RESET}
   --private-key <key>     Your Nostr private key (hex/nsec format, overrides env, auto-generated if not provided)
   --relays <urls>         Comma-separated relay URLs
   --encryption-mode       Encryption mode: optional, required, disabled
+  --payment-mode          Payment interaction mode: transparent (default), explicit_gating
   --stateless             Enable stateless transport mode (default)
   --stateful              Disable stateless transport mode
   --details               Show resolved server identity and relay details during inspection
@@ -865,6 +950,13 @@ ${BOLD}Aliases & config:${RESET}
   Priority: CLI > custom config (--config) > project .cvmi.json > global ~/.cvmi/config.json > env vars
   Use ${TEXT}cvmi config add <alias> <pubkey>${RESET} to save an alias, and ${TEXT}cvmi config list${RESET} to inspect available aliases
   Use ${TEXT}cvmi call <alias>${RESET} to inspect a server and ${TEXT}cvmi call <alias> <tool>${RESET} to invoke a tool
+
+${BOLD}Payments (CEP-8):${RESET} only relevant when the server gates the called tool behind payment.
+  --payment-mode transparent (default) | explicit_gating
+    transparent     Renders the lightning invoice to stderr and waits for out-of-band
+                    settlement (for humans in a terminal).
+    explicit_gating Prints the raw payment schema as JSON on stdout and exits with code 2
+                    (for agents: parse stdout, pay out-of-band, then retry).
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi call weather
