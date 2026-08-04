@@ -16,10 +16,7 @@ import {
 // Configuration
 const CLIENT_PRIVATE_KEY = process.env.CLIENT_PRIVATE_KEY!;
 const SERVER_PUBKEY = process.env.SERVER_PUBKEY!;
-const RELAYS = process.env.RELAYS?.split(',') || [
-  'wss://relay.contextvm.org',
-  'wss://cvm.otherstuff.ai',
-];
+const RELAYS = process.env.RELAYS?.split(',') || ['wss://relay.contextvm.org'];
 
 async function main() {
   // 1. Setup signer and relay handler

@@ -15,7 +15,7 @@ import type {
 } from './types.js';
 
 /** Default relay URLs */
-export const DEFAULT_RELAYS = ['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai'];
+export const DEFAULT_RELAYS = ['wss://relay.contextvm.org'];
 
 /** Default encryption mode */
 export const DEFAULT_ENCRYPTION = EncryptionMode.OPTIONAL;

@@ -23,7 +23,7 @@ export type ServePaymentsConfig = Omit<ServerPaymentsOptions, 'processors'> & {
 export interface ServeConfig {
   /** Private key resolved from CLI or environment (never from JSON config files) */
   privateKey: string;
-  /** Relay URLs (defaults to wss://relay.contextvm.org and wss://cvm.otherstuff.ai) */
+  /** Relay URLs (defaults to wss://relay.contextvm.org) */
   relays: string[];
   /** Whether this is a public server */
   public?: boolean;
@@ -58,7 +58,7 @@ export type ServeJsonConfig = Omit<ServeConfig, 'privateKey'>;
 export interface UseConfig {
   /** Private key resolved from CLI or environment (never from JSON config files) */
   privateKey: string;
-  /** Relay URLs (defaults to wss://relay.contextvm.org and wss://cvm.otherstuff.ai) */
+  /** Relay URLs (defaults to wss://relay.contextvm.org) */
   relays: string[];
   /** Server identity to connect to (hex, npub, or nprofile) */
   serverPubkey?: string;

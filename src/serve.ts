@@ -316,7 +316,7 @@ ${BOLD}Options:${RESET}
   --private-key <key>     Nostr private key (hex/nsec format, auto-generated if not provided)
   --persist-private-key   Save private key to .env file for future use
   --env, -e <k=v>         Pass environment variable to the spawned MCP server (repeatable)
-  --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
+  --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org)
   --public                Make server publicly accessible (default: private)
   --encryption-mode       Encryption mode: optional, required, disabled (default: optional)
   --verbose               Enable verbose logging

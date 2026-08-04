@@ -54,7 +54,7 @@ await relayPool.subscribe([{ kinds: [SERVER_ANNOUNCEMENT_KIND] }], (event) => {
 Query multiple relays for redundancy:
 
 ```typescript
-const relayUrls = ['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai', 'wss://nos.lol'];
+const relayUrls = ['wss://relay.contextvm.org', 'wss://nos.lol'];
 
 const relayPool = new ApplesauceRelayPool(relayUrls);
 ```

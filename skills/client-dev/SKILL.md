@@ -21,7 +21,7 @@ import {
 } from '@contextvm/sdk';
 
 const signer = new PrivateKeySigner(process.env.CLIENT_PRIVATE_KEY!);
-const relayPool = new ApplesauceRelayPool(['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai']);
+const relayPool = new ApplesauceRelayPool(['wss://relay.contextvm.org']);
 
 const SERVER_PUBKEY = 'server-public-key-hex';
 

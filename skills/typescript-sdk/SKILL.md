@@ -114,7 +114,7 @@ See [`references/custom-signers.md`](references/custom-signers.md) for examples.
 Production-grade relay management:
 
 ```typescript
-const pool = new ApplesauceRelayPool(['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai']);
+const pool = new ApplesauceRelayPool(['wss://relay.contextvm.org']);
 ```
 
 Features:

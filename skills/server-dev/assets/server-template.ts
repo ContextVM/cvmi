@@ -16,10 +16,7 @@ import { z } from 'zod';
 
 // Configuration
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY!;
-const RELAYS = process.env.RELAYS?.split(',') || [
-  'wss://relay.contextvm.org',
-  'wss://cvm.otherstuff.ai',
-];
+const RELAYS = process.env.RELAYS?.split(',') || ['wss://relay.contextvm.org'];
 
 async function main() {
   // 1. Setup signer and relay handler

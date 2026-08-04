@@ -130,7 +130,7 @@ ${BOLD}Options:${RESET}
   --config <path>         Path to custom config JSON file
   --private-key <key>     Your Nostr private key (hex/nsec format, overrides env, auto-generated if not provided)
   --persist-private-key   Save private key to .env file for future use
-  --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
+  --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org)
   --encryption-mode       Encryption mode: optional, required, disabled (default: optional)
   --payment-mode          Payment interaction: explicit_gating (default), transparent
   --verbose               Enable verbose logging

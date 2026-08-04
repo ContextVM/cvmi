@@ -1,5 +1,11 @@
 # cvmi
 
+## 0.4.1
+
+### Patch Changes
+
+- chore: update dependencies and refine scripts
+
 ## 0.4.0
 
 ### Minor Changes

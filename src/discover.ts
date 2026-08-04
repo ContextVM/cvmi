@@ -232,7 +232,7 @@ ${BOLD}Description:${RESET}
   Query relays for public ContextVM server announcements (kind 11316).
 
 ${BOLD}Options:${RESET}
-  --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org,wss://cvm.otherstuff.ai)
+  --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org)
   --limit <n>             Limit the number of returned servers
   --raw                   Print raw JSON results
   --verbose               Enable verbose logging

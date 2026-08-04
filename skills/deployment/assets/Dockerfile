@@ -11,7 +11,7 @@ COPY . .
 
 # Environment variables
 ENV SERVER_PRIVATE_KEY=""
-ENV RELAYS="wss://relay.contextvm.org,wss://cvm.otherstuff.ai"
+ENV RELAYS="wss://relay.contextvm.org"
 ENV LOG_LEVEL="info"
 
 # Health check

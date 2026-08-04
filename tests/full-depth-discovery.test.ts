@@ -52,7 +52,7 @@ description: Nested skill
     const skills = await discoverSkills(testDir, undefined, { fullDepth: false });
 
     expect(skills).toHaveLength(1);
-    expect(skills[0].name).toBe('root-skill');
+    expect(skills[0]!.name).toBe('root-skill');
   });
 
   it('should return all skills when fullDepth is true', async () => {
@@ -130,7 +130,7 @@ description: Nested skill
     const skills = await discoverSkills(testDir);
 
     expect(skills).toHaveLength(1);
-    expect(skills[0].name).toBe('root-skill');
+    expect(skills[0]!.name).toBe('root-skill');
   });
 
   it('should still find all skills when no root SKILL.md exists (regardless of fullDepth)', async () => {
@@ -199,6 +199,6 @@ description: Nested skill with same name
 
     // Should only have one skill (deduplication by name)
     expect(skills).toHaveLength(1);
-    expect(skills[0].name).toBe('my-skill');
+    expect(skills[0]!.name).toBe('my-skill');
   });
 });

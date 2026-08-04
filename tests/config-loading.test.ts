@@ -18,7 +18,6 @@ import {
   DEFAULT_RELAYS,
   DEFAULT_ENCRYPTION,
 } from '../src/config/loader.ts';
-import type { CvmiConfig } from '../src/config/types.ts';
 
 describe('Config Paths', () => {
   describe('getConfigPaths', () => {

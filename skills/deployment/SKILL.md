@@ -41,7 +41,7 @@ RUN bun install --frozen-lockfile
 COPY . .
 
 ENV SERVER_PRIVATE_KEY=""
-ENV RELAYS="wss://relay.contextvm.org,wss://cvm.otherstuff.ai"
+ENV RELAYS="wss://relay.contextvm.org"
 ENV LOG_LEVEL="info"
 
 EXPOSE 3000
@@ -58,7 +58,7 @@ services:
     build: .
     environment:
       - SERVER_PRIVATE_KEY=${SERVER_PRIVATE_KEY}
-      - RELAYS=wss://relay.contextvm.org,wss://cvm.otherstuff.ai
+      - RELAYS=wss://relay.contextvm.org
       - LOG_LEVEL=info
       - ENCRYPTION_MODE=optional
     restart: unless-stopped
@@ -77,7 +77,6 @@ See [`assets/docker-compose.yml`](assets/docker-compose.yml) for complete exampl
 
 ```
 wss://relay.contextvm.org
-wss://cvm.otherstuff.ai
 wss://nos.lol
 ```
 

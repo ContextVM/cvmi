@@ -18,7 +18,7 @@ import { PrivateKeySigner } from '@contextvm/sdk';
 import { ApplesauceRelayPool } from '@contextvm/sdk';
 
 const signer = new PrivateKeySigner(process.env.SERVER_PRIVATE_KEY!);
-const relayPool = new ApplesauceRelayPool(['wss://relay.contextvm.org', 'wss://cvm.otherstuff.ai']);
+const relayPool = new ApplesauceRelayPool(['wss://relay.contextvm.org']);
 
 const server = new McpServer({
   name: 'my-server',

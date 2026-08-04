@@ -27,19 +27,19 @@ describe('filterSkills', () => {
     it('matches exact name', () => {
       const result = filterSkills(skills, ['foo']);
       expect(result.length).toBe(1);
-      expect(result[0].name).toBe('foo');
+      expect(result[0]!.name).toBe('foo');
     });
 
     it('matches case insensitive', () => {
       const result = filterSkills(skills, ['FOO']);
       expect(result.length).toBe(1);
-      expect(result[0].name).toBe('foo');
+      expect(result[0]!.name).toBe('foo');
     });
 
     it('matches kebab-case skill name', () => {
       const result = filterSkills(skills, ['convex-best-practices']);
       expect(result.length).toBe(1);
-      expect(result[0].name).toBe('convex-best-practices');
+      expect(result[0]!.name).toBe('convex-best-practices');
     });
 
     it('matches multiple skills', () => {
@@ -55,13 +55,13 @@ describe('filterSkills', () => {
       // Simulates: --skill "Convex Best Practices"
       const result = filterSkills(skills, ['Convex Best Practices']);
       expect(result.length).toBe(1);
-      expect(result[0].name).toBe('Convex Best Practices');
+      expect(result[0]!.name).toBe('Convex Best Practices');
     });
 
     it('matches quoted multi-word name case insensitive', () => {
       const result = filterSkills(skills, ['convex best practices']);
       expect(result.length).toBe(1);
-      expect(result[0].name).toBe('Convex Best Practices');
+      expect(result[0]!.name).toBe('Convex Best Practices');
     });
   });
 
