@@ -5,7 +5,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { NostrMCPProxy, PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
-import type { PaymentInteractionMode } from '@contextvm/sdk/payments';
+import type { ClientPaymentsOptions, PaymentInteractionMode } from '@contextvm/sdk/payments';
 import { loadConfig, getUseConfig, DEFAULT_RELAYS } from './config/index.ts';
 import { generatePrivateKey, normalizePrivateKey } from './utils/crypto.ts';
 import { waitForShutdownSignal } from './utils/process.ts';
@@ -21,6 +21,12 @@ export interface UseOptions {
   verbose?: boolean;
   persistPrivateKey?: boolean;
   paymentMode?: PaymentInteractionMode;
+}
+
+function resolveProxyPaymentOptions(
+  paymentMode: PaymentInteractionMode | undefined
+): ClientPaymentsOptions | undefined {
+  return paymentMode ? { paymentInteraction: paymentMode } : undefined;
 }
 
 /**
@@ -86,10 +92,9 @@ export async function use(serverPubkeyArg: string | undefined, options: UseOptio
   // Create stdio transport for MCP host
   const mcpTransport = new StdioServerTransport();
 
-  // Create proxy
-  // ponytail: default explicit_gating for `use` (agent host over stdio) — a priced
-  // tool surfaces a clean -32042 error the agent can relay, instead of streaming an
-  // invoice no human is watching. `call` defaults to transparent (human in terminal).
+  // Leave payment negotiation unspecified by default for compatibility with free,
+  // legacy, and transparent-only servers. Explicit gating remains opt-in.
+  const paymentOptions = resolveProxyPaymentOptions(options.paymentMode);
   const proxy = new NostrMCPProxy({
     mcpHostTransport: mcpTransport,
     nostrTransportOptions: {
@@ -99,7 +104,7 @@ export async function use(serverPubkeyArg: string | undefined, options: UseOptio
       encryptionMode: useConfig.encryption,
       logLevel: options.verbose ? 'debug' : 'info',
     },
-    paymentOptions: { paymentInteraction: options.paymentMode ?? 'explicit_gating' },
+    ...(paymentOptions ? { paymentOptions } : {}),
   });
 
   // Start proxy
@@ -132,7 +137,7 @@ ${BOLD}Options:${RESET}
   --persist-private-key   Save private key to .env file for future use
   --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org)
   --encryption-mode       Encryption mode: optional, required, disabled (default: optional)
-  --payment-mode          Payment interaction: explicit_gating (default), transparent
+  --payment-mode          Payment interaction: transparent (default), explicit_gating
   --verbose               Enable verbose logging
   --help, -h              Show this help message
 
@@ -163,11 +168,11 @@ ${BOLD}SDK Logging (set via environment, not config files):${RESET}
     CVMI_USE_PRIVATE_KEY=nsec1...
 
 ${BOLD}Payments (CEP-8):${RESET} only relevant when the remote server gates tools behind payment.
-  --payment-mode explicit_gating (default) | transparent
-    explicit_gating  A priced tool surfaces a -32042 "Payment Required" error carrying the
-                     payment schema, so the host (e.g. an agent) can handle it. Default,
-                     since nothing watches stdio for an invoice.
-    transparent      Streams a lightning invoice notification for a human to pay.
+  --payment-mode transparent (default) | explicit_gating
+    transparent      Uses the interoperable default without requesting explicit gating.
+                     Payment notifications are forwarded over stdio.
+    explicit_gating  Requests a -32042 "Payment Required" error carrying the payment
+                     schema. Use with servers that advertise explicit-gating support.
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi use npub1q... ${DIM}# connect to remote server by public key${RESET}
@@ -177,3 +182,5 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi use --help ${DIM}# show this help${RESET}
   `);
 }
+
+export const __test__ = { resolveProxyPaymentOptions };

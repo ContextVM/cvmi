@@ -725,7 +725,7 @@ interface UseParseResult {
   encryption: EncryptionMode | undefined;
   config: string | undefined;
   persistPrivateKey: boolean;
-  paymentMode: PaymentInteractionMode;
+  paymentMode: PaymentInteractionMode | undefined;
   unknownFlags: string[];
 }
 
@@ -848,7 +848,7 @@ function parseUseArgs(args: string[]): UseParseResult {
     encryption: undefined,
     config: undefined,
     persistPrivateKey: false,
-    paymentMode: 'explicit_gating',
+    paymentMode: undefined,
     unknownFlags: [],
   };
 

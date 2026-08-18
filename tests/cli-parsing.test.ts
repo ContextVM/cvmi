@@ -131,7 +131,24 @@ describe('CLI Argument Parsing', () => {
     it('parses server pubkey as positional', () => {
       const result = __test__.parseUseArgs(['npub1abcdef123456']);
       expect(result.serverPubkey).toBe('npub1abcdef123456');
+      expect(result.paymentMode).toBeUndefined();
       expect(result.unknownFlags).toEqual([]);
+    });
+
+    it('parses an explicit payment interaction mode', () => {
+      const transparent = __test__.parseUseArgs([
+        'npub1abcdef123456',
+        '--payment-mode',
+        'transparent',
+      ]);
+      expect(transparent.paymentMode).toBe('transparent');
+
+      const explicitGating = __test__.parseUseArgs([
+        'npub1abcdef123456',
+        '--payment-mode',
+        'explicit_gating',
+      ]);
+      expect(explicitGating.paymentMode).toBe('explicit_gating');
     });
 
     it('prefers --server-pubkey flag over positional', () => {
