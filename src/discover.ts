@@ -52,6 +52,8 @@ function parseAnnouncement(event: Event, relay: string): DiscoveredServer {
     const match = event.tags.find((tag) => tag[0] === name);
     return typeof match?.[1] === 'string' ? match[1] : undefined;
   };
+  const hasFlagTag = (name: string): boolean =>
+    event.tags.some((tag) => tag[0] === name && (tag.length === 1 || tag[1] === 'true'));
 
   const nestedInfo =
     content.serverInfo && typeof content.serverInfo === 'object'
@@ -71,7 +73,7 @@ function parseAnnouncement(event: Event, relay: string): DiscoveredServer {
     (typeof nestedInfo?.website === 'string' ? nestedInfo.website : undefined) ??
     tagValue('website');
   const supportsEncryption =
-    tagValue('support_encryption') === 'true' ||
+    hasFlagTag('support_encryption') ||
     content.support_encryption === true ||
     nestedInfo?.support_encryption === true;
 
@@ -86,6 +88,8 @@ function parseAnnouncement(event: Event, relay: string): DiscoveredServer {
     createdAt: event.created_at,
   };
 }
+
+export const __test__ = { parseAnnouncement };
 
 function mergeServers(
   existing: DiscoveredServer | undefined,

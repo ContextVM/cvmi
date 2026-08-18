@@ -183,6 +183,27 @@ describe('CLI Argument Parsing', () => {
     });
   });
 
+  describe('parseCallArgs', () => {
+    it('forwards every parsed output and timeout option to the call implementation', () => {
+      const parsed = __test__.parseCallArgs([
+        'npub1server',
+        'read_media_file',
+        '--pretty-raw',
+        '--extract',
+        'content[0].data',
+        '--timeout',
+        '45000',
+      ]);
+
+      expect(__test__.toCallOptions(parsed)).toMatchObject({
+        raw: true,
+        prettyRaw: true,
+        extract: 'content[0].data',
+        timeout: 45000,
+      });
+    });
+  });
+
   describe('parseServeArgs missing value handling', () => {
     it('reports missing value for --private-key', () => {
       const result = __test__.parseServeArgs(['--private-key']);
