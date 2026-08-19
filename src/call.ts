@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { CallToolResult, Progress, Tool } from '@modelcontextprotocol/sdk/types.js';
 import { PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
 import { NostrClientTransport } from '@contextvm/sdk/transport';
-import { nip19, SimplePool, type Event } from 'nostr-tools';
+import { nip19, SimplePool } from 'nostr-tools';
 import {
   loadConfig,
   loadCallPrivateKeyFromEnv,
@@ -15,6 +15,11 @@ import { generatePrivateKey, normalizePrivateKey, normalizePublicKey } from './u
 import { BOLD, CYAN, DIM, RESET, TEXT, YELLOW } from './constants/ui.ts';
 import { renderDefaultResult } from './call/render-result.ts';
 import { renderSchemaProperties, renderToolSchema } from './call/render-schema.ts';
+import {
+  announcementHexPubkey,
+  announcementSupportsEncryption,
+  SERVER_ANNOUNCEMENT_KIND,
+} from './discover.ts';
 import {
   parseCapabilityPricing,
   formatPrice,
@@ -30,8 +35,8 @@ import {
 import { PAYMENT_REQUIRED_ERROR_CODE } from '@contextvm/sdk/payments/constants';
 
 const HEX_PUBKEY_PATTERN = /^[0-9a-f]{64}$/i;
-const SERVER_ANNOUNCEMENT_KIND = 11316;
 const ENCRYPTION_DISCOVERY_TIMEOUT_MS = 4000;
+const MAX_STREAM_DRAIN_GRACE_MS = 30000;
 export const DEFAULT_CALL_TIMEOUT_MS = 60000;
 export const DEFAULT_CALL_MAX_TOTAL_TIMEOUT_MS = 300000;
 const MAX_CALL_TIMEOUT_MS = 2147483647;
@@ -321,36 +326,6 @@ type EncryptionSupportLookup = (
   maxWaitMs: number
 ) => Promise<boolean | undefined>;
 
-function getTargetHexPubkey(server: string): string {
-  if (server.startsWith('nprofile')) {
-    const decoded = nip19.decode(server);
-    if (decoded.type !== 'nprofile') {
-      throw new Error(`Expected nprofile server identity, got ${decoded.type}`);
-    }
-    return decoded.data.pubkey;
-  }
-
-  return normalizePublicKey(server);
-}
-
-function announcementSupportsEncryption(event: Event): boolean {
-  const encryptionTag = event.tags.find((tag) => tag[0] === 'support_encryption');
-  if (encryptionTag) {
-    return encryptionTag.length === 1 || encryptionTag[1] === 'true';
-  }
-
-  try {
-    const content = event.content ? (JSON.parse(event.content) as Record<string, unknown>) : {};
-    const serverInfo =
-      content.serverInfo && typeof content.serverInfo === 'object'
-        ? (content.serverInfo as Record<string, unknown>)
-        : undefined;
-    return content.support_encryption === true || serverInfo?.support_encryption === true;
-  } catch {
-    return false;
-  }
-}
-
 async function lookupServerEncryptionSupport(
   target: ResolvedServerTarget,
   maxWaitMs: number
@@ -364,7 +339,7 @@ async function lookupServerEncryptionSupport(
       relays,
       {
         kinds: [SERVER_ANNOUNCEMENT_KIND],
-        authors: [getTargetHexPubkey(target.server)],
+        authors: [announcementHexPubkey(target.server)],
       },
       { maxWait: maxWaitMs }
     );
@@ -626,6 +601,15 @@ function resolveRequestTimeouts(options: CallOptions): {
   };
 }
 
+/** Race a promise against a drain deadline; the timer is always cleared. */
+function raceDrain<T>(promise: Promise<T>, graceMs: number): Promise<T | { type: 'drained' }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const drain = new Promise<{ type: 'drained' }>((resolve) => {
+    timer = setTimeout(() => resolve({ type: 'drained' }), graceMs);
+  });
+  return Promise.race([promise, drain]).finally(() => clearTimeout(timer));
+}
+
 async function callStreamingTool(
   remote: RemoteClient,
   toolName: string,
@@ -655,6 +639,7 @@ async function callStreamingTool(
 
   const stream = setup.value.stream as StreamSession;
   const iterator = stream[Symbol.asyncIterator]();
+  const drainGraceMs = Math.min(requestTimeouts.timeout, MAX_STREAM_DRAIN_GRACE_MS);
   let terminalResult: CallToolResult | undefined;
   let sawChunk = false;
   let inlineTextOpen = false;
@@ -670,15 +655,12 @@ async function callStreamingTool(
         (value) => ({ type: 'next' as const, value }),
         (error: unknown) => ({ type: 'error' as const, error })
       );
+      // ponytail: after the terminal result, drain is best-effort — a zero-tick
+      // grace can drop an in-flight first chunk (the result is authoritative
+      // anyway), and a stuck iterator is bounded by the grace deadline instead
+      // of hanging the CLI forever.
       const outcome = terminalResult
-        ? sawChunk
-          ? await pendingNext
-          : await Promise.race([
-              pendingNext,
-              new Promise<{ type: 'drained' }>((resolve) =>
-                setTimeout(() => resolve({ type: 'drained' }), 0)
-              ),
-            ])
+        ? await raceDrain(pendingNext, sawChunk ? drainGraceMs : 0)
         : await Promise.race([pendingNext, resultOutcome]);
 
       if (outcome.type === 'error') throw outcome.error;
@@ -690,7 +672,10 @@ async function callStreamingTool(
         terminalResult = outcome.value;
         continue;
       }
-      if (outcome.type === 'drained') return terminalResult!;
+      if (outcome.type === 'drained') {
+        if (inlineTextOpen) process.stdout.write('\n');
+        return terminalResult!;
+      }
       pendingNext = undefined;
       if (outcome.value.done) {
         if (inlineTextOpen) process.stdout.write('\n');
@@ -856,10 +841,16 @@ async function createRemoteClient(target: ResolvedServerTarget, options: CallOpt
 
   const { timeout: timeoutMs, maxTotalTimeout: maxTotalTimeoutMs } =
     resolveRequestTimeouts(options);
-  const encryptionMode = await resolveEffectiveEncryptionMode(
-    target,
-    Math.min(timeoutMs, ENCRYPTION_DISCOVERY_TIMEOUT_MS)
-  );
+  // Only stateless calls (the default) probe: they never send an initialize
+  // handshake, so the announcement is the only pre-flight signal. Stateful
+  // connections learn capabilities during the handshake — skip the extra
+  // relay roundtrip.
+  const encryptionMode = target.isStateless
+    ? await resolveEffectiveEncryptionMode(
+        target,
+        Math.min(timeoutMs, ENCRYPTION_DISCOVERY_TIMEOUT_MS)
+      )
+    : target.encryption;
   if (encryptionMode !== target.encryption) {
     logVerbose(options.verbose, 'Server does not advertise encryption; using unencrypted mode.');
   }
@@ -1274,7 +1265,7 @@ ${BOLD}Options:${RESET}
   --relays <urls>         Comma-separated relay URLs
   --encryption-mode       Encryption mode: optional, required, disabled
   --payment-mode          Payment interaction mode: transparent (default), explicit_gating
-  --timeout <ms>          Request timeout; defaults to 60s idle / 5m total
+  --timeout <ms>          Request timeout; caps both idle and total time (defaults: 60s idle / 5m total)
   --stateless             Enable stateless transport mode (default)
   --stateful              Disable stateless transport mode
   --details               Show resolved server identity and relay details during inspection

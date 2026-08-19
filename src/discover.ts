@@ -1,9 +1,44 @@
 import { nip19, SimplePool, type Event } from 'nostr-tools';
 import { DEFAULT_RELAYS } from './config/index.ts';
+import { normalizePublicKey } from './utils/crypto.ts';
 import { BOLD, CYAN, DIM, RESET } from './constants/ui.ts';
 
 const SERVER_ANNOUNCEMENT_KIND = 11316;
 const DISCOVER_TIMEOUT_MS = 4000;
+
+export { SERVER_ANNOUNCEMENT_KIND };
+
+/** Hex pubkey for an announcement lookup; accepts hex, npub, or nprofile. */
+export function announcementHexPubkey(server: string): string {
+  if (server.startsWith('nprofile')) {
+    const decoded = nip19.decode(server);
+    if (decoded.type !== 'nprofile') {
+      throw new Error(`Expected nprofile server identity, got ${decoded.type}`);
+    }
+    return decoded.data.pubkey;
+  }
+
+  return normalizePublicKey(server);
+}
+
+/** Whether a kind-11316 announcement advertises encryption support. */
+export function announcementSupportsEncryption(event: Event): boolean {
+  const encryptionTag = event.tags.find((tag) => tag[0] === 'support_encryption');
+  if (encryptionTag) {
+    return encryptionTag.length === 1 || encryptionTag[1] === 'true';
+  }
+
+  try {
+    const content = event.content ? (JSON.parse(event.content) as Record<string, unknown>) : {};
+    const serverInfo =
+      content.serverInfo && typeof content.serverInfo === 'object'
+        ? (content.serverInfo as Record<string, unknown>)
+        : undefined;
+    return content.support_encryption === true || serverInfo?.support_encryption === true;
+  } catch {
+    return false;
+  }
+}
 
 export interface DiscoverOptions {
   relays?: string[];
@@ -52,9 +87,6 @@ function parseAnnouncement(event: Event, relay: string): DiscoveredServer {
     const match = event.tags.find((tag) => tag[0] === name);
     return typeof match?.[1] === 'string' ? match[1] : undefined;
   };
-  const hasFlagTag = (name: string): boolean =>
-    event.tags.some((tag) => tag[0] === name && (tag.length === 1 || tag[1] === 'true'));
-
   const nestedInfo =
     content.serverInfo && typeof content.serverInfo === 'object'
       ? (content.serverInfo as Record<string, unknown>)
@@ -72,10 +104,7 @@ function parseAnnouncement(event: Event, relay: string): DiscoveredServer {
     (typeof content.website === 'string' ? content.website : undefined) ??
     (typeof nestedInfo?.website === 'string' ? nestedInfo.website : undefined) ??
     tagValue('website');
-  const supportsEncryption =
-    hasFlagTag('support_encryption') ||
-    content.support_encryption === true ||
-    nestedInfo?.support_encryption === true;
+  const supportsEncryption = announcementSupportsEncryption(event);
 
   return {
     pubkey: event.pubkey,

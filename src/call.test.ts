@@ -1219,6 +1219,73 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
     resetCreateRemoteClientFactoryForTests();
   });
 
+  it('bounds the post-result drain instead of hanging on a stuck stream', async () => {
+    const dispose = vi.fn();
+    const terminalResult = {
+      content: [{ type: 'text', text: 'final answer' }],
+    };
+    let resolveResult!: (value: typeof terminalResult) => void;
+    const resultPromise = new Promise<typeof terminalResult>((resolve) => {
+      resolveResult = resolve;
+    });
+    const stream = {
+      isActive: true,
+      abort: vi.fn().mockResolvedValue(undefined),
+      dispose,
+      async *[Symbol.asyncIterator]() {
+        yield {
+          chunkIndex: 0,
+          value: '{"object":"chat.completion.chunk","choices":[{"delta":{"content":"hi"}}]}',
+        };
+        resolveResult(terminalResult);
+        await new Promise(() => {}); // iterator never advances again
+      },
+    };
+    const prepareOutboundOpenStreamSession = vi.fn().mockResolvedValue({
+      progressToken: 'stream-token',
+      stream,
+    });
+    const close = vi.fn().mockResolvedValue(undefined);
+
+    setCreateRemoteClientFactoryForTests(
+      vi.fn().mockResolvedValue({
+        client: { callTool: vi.fn().mockReturnValue(resultPromise) },
+        transport: { prepareOutboundOpenStreamSession },
+        metadata: {},
+        close,
+      }) as never
+    );
+
+    let exitCode: number | undefined;
+    const streamedOutput: string[] = [];
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: unknown) => {
+      streamedOutput.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write);
+    let output: string[] = [];
+    try {
+      output = await captureConsoleOutputAsync(async () => {
+        // Small timeout shrinks the drain grace so the test completes quickly.
+        exitCode = await call(
+          '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+          'chat.complete',
+          { model: 'faux-1', stream: true },
+          { privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h', timeout: 50 }
+        );
+      });
+    } finally {
+      writeSpy.mockRestore();
+    }
+
+    expect(streamedOutput.join('')).toBe('hi\n');
+    expect(output.join('\n')).toContain('final answer');
+    expect(exitCode).toBe(0);
+    expect(dispose).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+
+    resetCreateRemoteClientFactoryForTests();
+  });
+
   it('prints pretty raw JSON when requested', async () => {
     const listTools = vi.fn().mockResolvedValue({
       tools: [
