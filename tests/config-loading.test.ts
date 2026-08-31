@@ -23,7 +23,8 @@ describe('Config Paths', () => {
   describe('getConfigPaths', () => {
     it('returns correct global and project paths', () => {
       const paths = getConfigPaths();
-      expect(paths.globalDir).toContain('.cvmi');
+      // Windows uses AppData\Roaming\cvmi (no dot); Unix uses ~/.cvmi.
+      expect(paths.globalDir).toContain(process.platform === 'win32' ? 'cvmi' : '.cvmi');
       expect(paths.globalConfig).toContain('config.json');
       expect(paths.projectConfig).toContain('.cvmi.json');
     });

@@ -16,9 +16,18 @@ async function importLoader() {
   return mod;
 }
 
+const runId = String(Date.now());
+const baseDir = join(tmpdir(), `cvmi-precedence-${runId}`);
+
+// Mock config home so the loader reads from our temp dir. Must be top-level:
+// a nested vi.mock gets hoisted with a broken closure. On Windows os.homedir()
+// uses USERPROFILE, so setting HOME alone cannot sandbox the global config.
+vi.mock('os', async () => {
+  const actual = await vi.importActual<typeof import('os')>('os');
+  return { ...actual, homedir: () => join(baseDir, 'home') };
+});
+
 describe('Config Precedence', () => {
-  const runId = String(Date.now());
-  const baseDir = join(tmpdir(), `cvmi-precedence-${runId}`);
   const projectDir = join(baseDir, 'project');
   const customConfigPath = join(baseDir, 'custom.json');
   const projectConfigPath = join(projectDir, '.cvmi.json');
@@ -30,12 +39,6 @@ describe('Config Precedence', () => {
 
     // Extra safety: ensure any code that uses HOME directly is also sandboxed.
     process.env.HOME = join(baseDir, 'home');
-
-    // Mock config home so the loader reads from our temp dir.
-    vi.mock('os', async () => {
-      const actual = await vi.importActual<typeof import('os')>('os');
-      return { ...actual, homedir: () => join(baseDir, 'home') };
-    });
 
     await mkdir(projectDir, { recursive: true });
 
@@ -52,7 +55,6 @@ describe('Config Precedence', () => {
 
   afterEach(async () => {
     process.chdir(originalCwd);
-    vi.unmock('os');
 
     // Cleanup test workspace.
     await rm(baseDir, { recursive: true, force: true });
