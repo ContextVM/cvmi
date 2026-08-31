@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { parseDiscoverArgs, showDiscoverHelp } from './discover.ts';
+import { __test__, parseDiscoverArgs, showDiscoverHelp } from './discover.ts';
 import { stripAnsi } from './test-utils.ts';
 
 describe('parseDiscoverArgs', () => {
+  it('recognizes the singleton CEP encryption-support tag', () => {
+    const server = __test__.parseAnnouncement(
+      {
+        id: 'event-id',
+        pubkey: 'a'.repeat(64),
+        created_at: 1,
+        kind: 11316,
+        tags: [['support_encryption']],
+        content: '{}',
+        sig: 'signature',
+      },
+      'wss://relay.example.com'
+    );
+
+    expect(server.supportsEncryption).toBe(true);
+  });
+
   it('parses supported flags', () => {
     const parsed = parseDiscoverArgs([
       '--relays',

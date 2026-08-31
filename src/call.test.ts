@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EncryptionMode } from '@contextvm/sdk';
+import { nip19 } from 'nostr-tools';
 import type { Progress } from '@modelcontextprotocol/sdk/types.js';
 import {
   __test__,
@@ -10,6 +11,7 @@ import {
 } from './call.ts';
 import { stripAnsi } from './test-utils.ts';
 import { PAYMENT_REQUIRED_ERROR_CODE } from '@contextvm/sdk/payments/constants';
+import { DEFAULT_RELAYS } from './config/index.ts';
 
 function captureConsoleOutput(render: () => void): string[] {
   const output: string[] = [];
@@ -60,6 +62,8 @@ describe('parseCallArgs', () => {
       '--encryption-mode',
       'required',
       '--stateful',
+      '--timeout',
+      '45000',
     ]);
 
     expect(parsed.server).toBe('weather');
@@ -73,6 +77,7 @@ describe('parseCallArgs', () => {
     expect(parsed.relays).toEqual(['wss://relay.example.com', 'wss://relay.two']);
     expect(parsed.encryption).toBe(EncryptionMode.REQUIRED);
     expect(parsed.isStateless).toBe(false);
+    expect(parsed.timeout).toBe(45000);
     expect(parsed.showServerDetails).toBe(false);
     expect(parsed.paymentMode).toBe('transparent');
   });
@@ -118,6 +123,59 @@ describe('parseCallArgs', () => {
     expect(parsed.help).toBe(true);
     expect(parsed.server).toBeUndefined();
     expect(parsed.unknownFlags).toEqual([]);
+  });
+
+  it('rejects non-positive and non-numeric timeout values', () => {
+    expect(parseCallArgs(['weather', '--timeout', '0']).unknownFlags).toEqual(['--timeout (0)']);
+    expect(parseCallArgs(['weather', '--timeout', 'soon']).unknownFlags).toEqual([
+      '--timeout (soon)',
+    ]);
+    expect(parseCallArgs(['weather', '--timeout', '2147483648']).unknownFlags).toEqual([
+      '--timeout (2147483648)',
+    ]);
+  });
+
+  it('uses server announcements to disable optional encryption only when unsupported', async () => {
+    const target = {
+      input: 'weather',
+      server: '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+      relays: ['wss://relay.contextvm.org'],
+      encryption: EncryptionMode.OPTIONAL,
+      isStateless: true,
+    };
+
+    await expect(
+      __test__.resolveEffectiveEncryptionMode(target, 1000, async () => false)
+    ).resolves.toBe(EncryptionMode.DISABLED);
+    await expect(
+      __test__.resolveEffectiveEncryptionMode(target, 1000, async () => true)
+    ).resolves.toBe(EncryptionMode.OPTIONAL);
+    await expect(
+      __test__.resolveEffectiveEncryptionMode(target, 1000, async () => undefined)
+    ).resolves.toBe(EncryptionMode.OPTIONAL);
+    await expect(
+      __test__.resolveEffectiveEncryptionMode(
+        { ...target, encryption: EncryptionMode.REQUIRED },
+        1000,
+        async () => false
+      )
+    ).rejects.toThrow('does not advertise encryption support');
+  });
+
+  it('falls back to bootstrap relays for a relay-less nprofile announcement lookup', () => {
+    const server = nip19.nprofileEncode({
+      pubkey: '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+      relays: [],
+    });
+
+    expect(
+      __test__.getDisplayRelays({
+        input: server,
+        server,
+        encryption: EncryptionMode.OPTIONAL,
+        isStateless: true,
+      })
+    ).toEqual(DEFAULT_RELAYS);
   });
 
   it('extracts nested result values with array access', () => {
@@ -597,12 +655,6 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
       .fn()
       .mockRejectedValue(new Error('Tool not found: height of the eiffel tower'));
     const close = vi.fn().mockResolvedValue(undefined);
-    const exitSpy = vi
-      .spyOn(process, 'exit')
-      .mockImplementation((code?: string | number | null) => {
-        throw new Error(`EXIT:${code}`);
-      });
-
     setCreateRemoteClientFactoryForTests(
       vi.fn().mockResolvedValue({
         client: {
@@ -618,24 +670,24 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
       }) as never
     );
 
+    let exitCode: number | undefined;
     const output = await captureConsoleOutputAsync(async () => {
-      await expect(
-        call(
-          '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
-          'height of the eiffel tower',
-          {},
-          { privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h' }
-        )
-      ).rejects.toThrow('EXIT:1');
+      exitCode = await call(
+        '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+        'height of the eiffel tower',
+        {},
+        { privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h' }
+      );
     });
 
     expect(callTool).toHaveBeenCalledTimes(1);
+    expect(exitCode).toBe(1);
+    expect(close).toHaveBeenCalled();
     expect(output.join('\n')).toContain('Tool not found: height of the eiffel tower');
     expect(output.join('\n')).toContain('cvmi call <server> <tool> [key=value ...] [options]');
     expect(output.join('\n')).toContain('search');
 
     resetCreateRemoteClientFactoryForTests();
-    exitSpy.mockRestore();
   });
 
   it('enables MCP progress handling by default for tool calls', async () => {
@@ -685,6 +737,8 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
       expect.objectContaining({
         onprogress: expect.any(Function),
         resetTimeoutOnProgress: true,
+        timeout: 60000,
+        maxTotalTimeout: 300000,
       })
     );
 
@@ -785,8 +839,9 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
       }) as never
     );
 
+    let exitCode: number | undefined;
     const output = await captureConsoleOutputAsync(async () => {
-      await call(
+      exitCode = await call(
         '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
         'read_media_file',
         { path: './ot-demo/img.jpg' },
@@ -799,6 +854,434 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
 
     expect(listTools).not.toHaveBeenCalled();
     expect(output).toContain('{"content":[{"data":"abc"}]}');
+    expect(exitCode).toBe(0);
+
+    resetCreateRemoteClientFactoryForTests();
+  });
+
+  it('keeps verbose diagnostics off stdout in raw mode', async () => {
+    const close = vi.fn().mockResolvedValue(undefined);
+    setCreateRemoteClientFactoryForTests(
+      vi.fn().mockResolvedValue({
+        client: {
+          callTool: vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }),
+        },
+        metadata: {},
+        close,
+      }) as never
+    );
+
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = (message?: unknown) => stdout.push(String(message ?? ''));
+    console.error = (message?: unknown) => stderr.push(String(message ?? ''));
+    try {
+      await call(
+        '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+        'read_media_file',
+        { path: './ot-demo/img.jpg' },
+        {
+          privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h',
+          raw: true,
+          verbose: true,
+        }
+      );
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+
+    expect(stdout).toHaveLength(1);
+    expect(() => JSON.parse(stdout[0]!)).not.toThrow();
+    expect(stderr.join('\n')).toContain('Connecting to');
+    expect(stderr.join('\n')).toContain('Calling tool: read_media_file');
+    expect(close).toHaveBeenCalled();
+
+    resetCreateRemoteClientFactoryForTests();
+  });
+
+  it('returns a non-zero status for MCP tool error results after rendering them', async () => {
+    const callTool = vi.fn().mockResolvedValue({
+      content: [{ type: 'text', text: 'Unknown model' }],
+      isError: true,
+    });
+    const close = vi.fn().mockResolvedValue(undefined);
+
+    setCreateRemoteClientFactoryForTests(
+      vi.fn().mockResolvedValue({
+        client: { callTool },
+        metadata: {},
+        close,
+      }) as never
+    );
+
+    let exitCode: number | undefined;
+    const output = await captureConsoleOutputAsync(async () => {
+      exitCode = await call(
+        '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+        'chat.complete',
+        { model: 'missing' },
+        { privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h' }
+      );
+    });
+
+    expect(output).toContain('Unknown model');
+    expect(exitCode).toBe(1);
+    expect(close).toHaveBeenCalled();
+
+    resetCreateRemoteClientFactoryForTests();
+  });
+
+  it('prints CEP-41 chunks and returns the terminal tool result', async () => {
+    const dispose = vi.fn();
+    const abort = vi.fn().mockResolvedValue(undefined);
+    const terminalResult = {
+      content: [],
+      structuredContent: { finish_reason: 'stop' },
+    };
+    let resolveResult!: (value: typeof terminalResult) => void;
+    const resultPromise = new Promise<typeof terminalResult>((resolve) => {
+      resolveResult = resolve;
+    });
+    const stream = {
+      isActive: true,
+      abort,
+      dispose,
+      async *[Symbol.asyncIterator]() {
+        yield {
+          chunkIndex: 0,
+          value: '{"object":"chat.completion.chunk","choices":[{"delta":{"role":"assistant"}}]}',
+        };
+        yield {
+          chunkIndex: 1,
+          value: '{"object":"chat.completion.chunk","choices":[{"delta":{"content":"hello"}}]}',
+        };
+        resolveResult(terminalResult);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        yield {
+          chunkIndex: 2,
+          value: '{"object":"chat.completion.chunk","choices":[{"delta":{"content":" world"}}]}',
+        };
+        yield {
+          chunkIndex: 3,
+          value:
+            '{"object":"chat.completion.chunk","choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"total_tokens":7}}',
+        };
+      },
+    };
+    const prepareOutboundOpenStreamSession = vi.fn().mockResolvedValue({
+      progressToken: 'stream-token',
+      stream,
+    });
+    const callTool = vi.fn().mockReturnValue(resultPromise);
+    const close = vi.fn().mockResolvedValue(undefined);
+
+    setCreateRemoteClientFactoryForTests(
+      vi.fn().mockResolvedValue({
+        client: { callTool },
+        transport: { prepareOutboundOpenStreamSession },
+        metadata: {},
+        close,
+      }) as never
+    );
+
+    let exitCode: number | undefined;
+    const streamedOutput: string[] = [];
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: unknown) => {
+      streamedOutput.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write);
+    let output: string[] = [];
+    try {
+      output = await captureConsoleOutputAsync(async () => {
+        exitCode = await call(
+          '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+          'chat.complete',
+          { model: 'faux-1', stream: true },
+          { privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h' }
+        );
+      });
+    } finally {
+      writeSpy.mockRestore();
+    }
+
+    expect(streamedOutput.join('')).toBe('hello world\n');
+    expect(output.join('\n')).not.toContain('chat.completion.chunk');
+    expect(output.join('\n')).toContain('finish_reason: stop');
+    expect(exitCode).toBe(0);
+    expect(dispose).toHaveBeenCalled();
+    expect(abort).not.toHaveBeenCalled();
+    expect(callTool).toHaveBeenCalledWith(
+      {
+        name: 'chat.complete',
+        arguments: { model: 'faux-1', stream: true },
+      },
+      undefined,
+      expect.objectContaining({
+        timeout: 60000,
+        maxTotalTimeout: 300000,
+      })
+    );
+
+    resetCreateRemoteClientFactoryForTests();
+  });
+
+  it('does not hang when a streaming call fails before the first chunk', async () => {
+    const dispose = vi.fn();
+    const stream = {
+      dispose,
+      [Symbol.asyncIterator]() {
+        return {
+          next: () => new Promise<IteratorResult<{ chunkIndex: number; value: string }>>(() => {}),
+        };
+      },
+    };
+    const prepareOutboundOpenStreamSession = vi.fn().mockResolvedValue({
+      progressToken: 'stream-token',
+      stream,
+    });
+    const rejection = new Error('Payment Required') as Error & { code: number };
+    rejection.code = PAYMENT_REQUIRED_ERROR_CODE;
+    const callTool = vi.fn().mockRejectedValue(rejection);
+    const close = vi.fn().mockResolvedValue(undefined);
+
+    setCreateRemoteClientFactoryForTests(
+      vi.fn().mockResolvedValue({
+        client: { callTool },
+        transport: { prepareOutboundOpenStreamSession },
+        metadata: {},
+        close,
+      }) as never
+    );
+
+    await expect(
+      call(
+        '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+        'chat.complete',
+        { model: 'faux-1', stream: true },
+        {
+          privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h',
+          paymentMode: 'explicit_gating',
+        }
+      )
+    ).rejects.toMatchObject({ name: 'ExplicitGatingError' });
+    expect(dispose).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+
+    resetCreateRemoteClientFactoryForTests();
+  });
+
+  it('aborts the producer when a call fails after streaming starts', async () => {
+    const dispose = vi.fn();
+    const abort = vi.fn().mockResolvedValue(undefined);
+    let rejectResult!: (error: Error) => void;
+    const resultPromise = new Promise<never>((_resolve, reject) => {
+      rejectResult = reject;
+    });
+    const stream = {
+      isActive: true,
+      abort,
+      dispose,
+      async *[Symbol.asyncIterator]() {
+        yield { chunkIndex: 0, value: '{"delta":"partial"}' };
+        rejectResult(new Error('request timed out'));
+        await new Promise(() => {});
+      },
+    };
+    const prepareOutboundOpenStreamSession = vi.fn().mockResolvedValue({
+      progressToken: 'stream-token',
+      stream,
+    });
+    const close = vi.fn().mockResolvedValue(undefined);
+
+    setCreateRemoteClientFactoryForTests(
+      vi.fn().mockResolvedValue({
+        client: { callTool: vi.fn().mockReturnValue(resultPromise) },
+        transport: { prepareOutboundOpenStreamSession },
+        metadata: {},
+        close,
+      }) as never
+    );
+
+    await captureConsoleOutputAsync(async () => {
+      await expect(
+        call(
+          '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+          'chat.complete',
+          { model: 'faux-1', stream: true },
+          {
+            privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h',
+            raw: true,
+          }
+        )
+      ).rejects.toThrow('request timed out');
+    });
+
+    expect(abort).toHaveBeenCalledWith('request timed out');
+    expect(dispose).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+
+    resetCreateRemoteClientFactoryForTests();
+  });
+
+  it('disposes a pending stream when the terminal result is a tool error', async () => {
+    const dispose = vi.fn();
+    const prepareOutboundOpenStreamSession = vi.fn().mockResolvedValue({
+      progressToken: 'stream-token',
+      stream: {
+        dispose,
+        [Symbol.asyncIterator]() {
+          return {
+            next: () =>
+              new Promise<IteratorResult<{ chunkIndex: number; value: string }>>(() => {}),
+          };
+        },
+      },
+    });
+    const close = vi.fn().mockResolvedValue(undefined);
+    setCreateRemoteClientFactoryForTests(
+      vi.fn().mockResolvedValue({
+        client: {
+          callTool: vi.fn().mockResolvedValue({
+            content: [{ type: 'text', text: 'Unknown model' }],
+            isError: true,
+          }),
+        },
+        transport: { prepareOutboundOpenStreamSession },
+        metadata: {},
+        close,
+      }) as never
+    );
+
+    let exitCode: number | undefined;
+    const output = await captureConsoleOutputAsync(async () => {
+      exitCode = await call(
+        '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+        'chat.complete',
+        { model: 'missing', stream: true },
+        { privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h' }
+      );
+    });
+
+    expect(output).toContain('Unknown model');
+    expect(exitCode).toBe(1);
+    expect(dispose).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+
+    resetCreateRemoteClientFactoryForTests();
+  });
+
+  it('falls back to the terminal result when no stream frames arrive', async () => {
+    const dispose = vi.fn();
+    const prepareOutboundOpenStreamSession = vi.fn().mockResolvedValue({
+      progressToken: 'stream-token',
+      stream: {
+        dispose,
+        [Symbol.asyncIterator]() {
+          return {
+            next: () =>
+              new Promise<IteratorResult<{ chunkIndex: number; value: string }>>(() => {}),
+          };
+        },
+      },
+    });
+    const close = vi.fn().mockResolvedValue(undefined);
+    setCreateRemoteClientFactoryForTests(
+      vi.fn().mockResolvedValue({
+        client: {
+          callTool: vi.fn().mockResolvedValue({
+            content: [{ type: 'text', text: 'ordinary result' }],
+          }),
+        },
+        transport: { prepareOutboundOpenStreamSession },
+        metadata: {},
+        close,
+      }) as never
+    );
+
+    let exitCode: number | undefined;
+    const output = await captureConsoleOutputAsync(async () => {
+      exitCode = await call(
+        '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+        'chat.complete',
+        { model: 'faux-1', stream: true },
+        { privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h' }
+      );
+    });
+
+    expect(output).toContain('ordinary result');
+    expect(exitCode).toBe(0);
+    expect(dispose).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+
+    resetCreateRemoteClientFactoryForTests();
+  });
+
+  it('bounds the post-result drain instead of hanging on a stuck stream', async () => {
+    const dispose = vi.fn();
+    const terminalResult = {
+      content: [{ type: 'text', text: 'final answer' }],
+    };
+    let resolveResult!: (value: typeof terminalResult) => void;
+    const resultPromise = new Promise<typeof terminalResult>((resolve) => {
+      resolveResult = resolve;
+    });
+    const stream = {
+      isActive: true,
+      abort: vi.fn().mockResolvedValue(undefined),
+      dispose,
+      async *[Symbol.asyncIterator]() {
+        yield {
+          chunkIndex: 0,
+          value: '{"object":"chat.completion.chunk","choices":[{"delta":{"content":"hi"}}]}',
+        };
+        resolveResult(terminalResult);
+        await new Promise(() => {}); // iterator never advances again
+      },
+    };
+    const prepareOutboundOpenStreamSession = vi.fn().mockResolvedValue({
+      progressToken: 'stream-token',
+      stream,
+    });
+    const close = vi.fn().mockResolvedValue(undefined);
+
+    setCreateRemoteClientFactoryForTests(
+      vi.fn().mockResolvedValue({
+        client: { callTool: vi.fn().mockReturnValue(resultPromise) },
+        transport: { prepareOutboundOpenStreamSession },
+        metadata: {},
+        close,
+      }) as never
+    );
+
+    let exitCode: number | undefined;
+    const streamedOutput: string[] = [];
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: unknown) => {
+      streamedOutput.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write);
+    let output: string[] = [];
+    try {
+      output = await captureConsoleOutputAsync(async () => {
+        // Small timeout shrinks the drain grace so the test completes quickly.
+        exitCode = await call(
+          '750682303c9f0ddad75941b49edc9d46e3ed306b9ee3335338a21a3e404c5fa3',
+          'chat.complete',
+          { model: 'faux-1', stream: true },
+          { privateKey: 'nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqj4xw9h', timeout: 50 }
+        );
+      });
+    } finally {
+      writeSpy.mockRestore();
+    }
+
+    expect(streamedOutput.join('')).toBe('hi\n');
+    expect(output.join('\n')).toContain('final answer');
+    expect(exitCode).toBe(0);
+    expect(dispose).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
 
     resetCreateRemoteClientFactoryForTests();
   });

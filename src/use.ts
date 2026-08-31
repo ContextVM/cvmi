@@ -5,8 +5,10 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { NostrMCPProxy, PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
-import type { PaymentInteractionMode } from '@contextvm/sdk/payments';
+import type { ClientPaymentsOptions, PaymentInteractionMode } from '@contextvm/sdk/payments';
+import { SimplePool, type Event } from 'nostr-tools';
 import { loadConfig, getUseConfig, DEFAULT_RELAYS } from './config/index.ts';
+import { announcementHexPubkey, SERVER_ANNOUNCEMENT_KIND } from './discover.ts';
 import { generatePrivateKey, normalizePrivateKey } from './utils/crypto.ts';
 import { waitForShutdownSignal } from './utils/process.ts';
 import { BOLD, DIM, RESET } from './constants/ui.ts';
@@ -21,6 +23,70 @@ export interface UseOptions {
   verbose?: boolean;
   persistPrivateKey?: boolean;
   paymentMode?: PaymentInteractionMode;
+}
+
+function resolveProxyPaymentOptions(
+  paymentMode: PaymentInteractionMode | undefined
+): ClientPaymentsOptions | undefined {
+  return paymentMode ? { paymentInteraction: paymentMode } : undefined;
+}
+
+const PAYMENT_DISCOVERY_TIMEOUT_MS = 4000;
+
+type AnnouncementLookup = (
+  relays: string[],
+  serverPubkey: string,
+  maxWaitMs: number
+) => Promise<Event | undefined>;
+
+async function lookupLatestServerAnnouncement(
+  relays: string[],
+  serverPubkey: string,
+  maxWaitMs: number
+): Promise<Event | undefined> {
+  const pool = new SimplePool();
+  try {
+    const events = await pool.querySync(
+      relays,
+      { kinds: [SERVER_ANNOUNCEMENT_KIND], authors: [serverPubkey] },
+      { maxWait: maxWaitMs }
+    );
+    return events.sort((left, right) => right.created_at - left.created_at)[0];
+  } finally {
+    pool.close(relays);
+  }
+}
+
+function announcementSupportsExplicitGating(event: Event): boolean {
+  // CEP-8: a gating-capable server advertises ['payment_interaction',
+  // 'explicit_gating'] as an availability tag on its announcement.
+  return event.tags.some((tag) => tag[0] === 'payment_interaction' && tag[1] === 'explicit_gating');
+}
+
+/**
+ * Default payment interaction for `use`: request explicit gating only when the
+ * server's announcement advertises it. Otherwise leave negotiation unset —
+ * free/legacy/transparent-only servers keep working (a transparent-only server
+ * outright rejects an explicit_gating request), and a priced tool surfaces a
+ * clean -32042 error an agent host can relay instead of an unwatched invoice.
+ */
+async function resolveDefaultPaymentMode(
+  relays: string[],
+  serverPubkey: string,
+  lookup: AnnouncementLookup = lookupLatestServerAnnouncement
+): Promise<PaymentInteractionMode | undefined> {
+  try {
+    const announcement = await lookup(
+      relays,
+      announcementHexPubkey(serverPubkey),
+      PAYMENT_DISCOVERY_TIMEOUT_MS
+    );
+    return announcement && announcementSupportsExplicitGating(announcement)
+      ? 'explicit_gating'
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -86,10 +152,15 @@ export async function use(serverPubkeyArg: string | undefined, options: UseOptio
   // Create stdio transport for MCP host
   const mcpTransport = new StdioServerTransport();
 
-  // Create proxy
-  // ponytail: default explicit_gating for `use` (agent host over stdio) — a priced
-  // tool surfaces a clean -32042 error the agent can relay, instead of streaming an
-  // invoice no human is watching. `call` defaults to transparent (human in terminal).
+  // Payment default is announcement-driven: explicit gating is requested only
+  // when the server advertises support (CEP-8), otherwise negotiation stays
+  // unset for compatibility with free, legacy, and transparent-only servers.
+  const paymentMode =
+    options.paymentMode ?? (await resolveDefaultPaymentMode(relays, serverPubkey));
+  if (options.verbose) {
+    p.log.message(`Payment interaction: ${paymentMode ?? 'transparent (server default)'}`);
+  }
+  const paymentOptions = resolveProxyPaymentOptions(paymentMode);
   const proxy = new NostrMCPProxy({
     mcpHostTransport: mcpTransport,
     nostrTransportOptions: {
@@ -99,7 +170,7 @@ export async function use(serverPubkeyArg: string | undefined, options: UseOptio
       encryptionMode: useConfig.encryption,
       logLevel: options.verbose ? 'debug' : 'info',
     },
-    paymentOptions: { paymentInteraction: options.paymentMode ?? 'explicit_gating' },
+    ...(paymentOptions ? { paymentOptions } : {}),
   });
 
   // Start proxy
@@ -132,7 +203,7 @@ ${BOLD}Options:${RESET}
   --persist-private-key   Save private key to .env file for future use
   --relays <urls>         Comma-separated relay URLs (default: wss://relay.contextvm.org)
   --encryption-mode       Encryption mode: optional, required, disabled (default: optional)
-  --payment-mode          Payment interaction: explicit_gating (default), transparent
+  --payment-mode          Payment interaction: transparent | explicit_gating (auto-detected by default)
   --verbose               Enable verbose logging
   --help, -h              Show this help message
 
@@ -163,11 +234,13 @@ ${BOLD}SDK Logging (set via environment, not config files):${RESET}
     CVMI_USE_PRIVATE_KEY=nsec1...
 
 ${BOLD}Payments (CEP-8):${RESET} only relevant when the remote server gates tools behind payment.
-  --payment-mode explicit_gating (default) | transparent
-    explicit_gating  A priced tool surfaces a -32042 "Payment Required" error carrying the
-                     payment schema, so the host (e.g. an agent) can handle it. Default,
-                     since nothing watches stdio for an invoice.
-    transparent      Streams a lightning invoice notification for a human to pay.
+  --payment-mode transparent | explicit_gating
+    transparent      Uses the interoperable default without requesting explicit gating.
+                     Payment notifications are forwarded over stdio.
+    explicit_gating  Requests a -32042 "Payment Required" error carrying the payment
+                     schema, so agent hosts fail fast instead of hanging on an invoice.
+  Default (no flag): explicit_gating when the server announcement advertises support,
+                     otherwise transparent.
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi use npub1q... ${DIM}# connect to remote server by public key${RESET}
@@ -177,3 +250,5 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi use --help ${DIM}# show this help${RESET}
   `);
 }
+
+export const __test__ = { resolveProxyPaymentOptions, resolveDefaultPaymentMode };

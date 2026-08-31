@@ -22,7 +22,14 @@ import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { track } from './telemetry.ts';
 import { serve, showServeHelp } from './serve.ts';
 import { showUseHelp, use } from './use.ts';
-import { call, parseCallArgs, showCallHelp, ExplicitGatingError } from './call.ts';
+import {
+  call,
+  parseCallArgs,
+  showCallHelp,
+  ExplicitGatingError,
+  type CallOptions,
+  type ParseCallResult,
+} from './call.ts';
 import { discover, parseDiscoverArgs, showDiscoverHelp } from './discover.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { runCn } from './cn/index.ts';
@@ -718,7 +725,7 @@ interface UseParseResult {
   encryption: EncryptionMode | undefined;
   config: string | undefined;
   persistPrivateKey: boolean;
-  paymentMode: PaymentInteractionMode;
+  paymentMode: PaymentInteractionMode | undefined;
   unknownFlags: string[];
 }
 
@@ -841,7 +848,7 @@ function parseUseArgs(args: string[]): UseParseResult {
     encryption: undefined,
     config: undefined,
     persistPrivateKey: false,
-    paymentMode: 'explicit_gating',
+    paymentMode: undefined,
     unknownFlags: [],
   };
 
@@ -898,11 +905,31 @@ function parseUseArgs(args: string[]): UseParseResult {
   return result;
 }
 
+function toCallOptions(parsed: ParseCallResult): CallOptions {
+  return {
+    debug: parsed.debug,
+    verbose: parsed.verbose,
+    raw: parsed.raw,
+    prettyRaw: parsed.prettyRaw,
+    extract: parsed.extract,
+    help: parsed.help,
+    showServerDetails: parsed.showServerDetails,
+    privateKey: parsed.privateKey,
+    relays: parsed.relays,
+    encryption: parsed.encryption,
+    isStateless: parsed.isStateless,
+    config: parsed.config,
+    paymentMode: parsed.paymentMode,
+    timeout: parsed.timeout,
+  };
+}
+
 // Exported for tests only (keeps parsing logic single-sourced).
 export const __test__ = {
   parseServeArgs,
   parseUseArgs,
   parseCallArgs,
+  toCallOptions,
 };
 
 // ============================================
@@ -1063,28 +1090,23 @@ async function main(): Promise<void> {
         break;
       }
 
+      let exitCode: number;
       try {
-        await call(parsed.server, parsed.capability, parsed.input, {
-          debug: parsed.debug,
-          verbose: parsed.verbose,
-          raw: parsed.raw,
-          help: parsed.help,
-          showServerDetails: parsed.showServerDetails,
-          privateKey: parsed.privateKey,
-          relays: parsed.relays,
-          encryption: parsed.encryption,
-          isStateless: parsed.isStateless,
-          config: parsed.config,
-          paymentMode: parsed.paymentMode,
-        });
+        exitCode = await call(
+          parsed.server,
+          parsed.capability,
+          parsed.input,
+          toCallOptions(parsed)
+        );
       } catch (error) {
         if (error instanceof ExplicitGatingError) {
           console.log(JSON.stringify(error.data, null, 2));
-          process.exit(2);
+          exitCode = 2;
+        } else {
+          throw error;
         }
-        throw error;
       }
-      process.exit(0);
+      process.exitCode = exitCode;
       break;
     }
     case 'config': {

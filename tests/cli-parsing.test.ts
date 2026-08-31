@@ -131,7 +131,24 @@ describe('CLI Argument Parsing', () => {
     it('parses server pubkey as positional', () => {
       const result = __test__.parseUseArgs(['npub1abcdef123456']);
       expect(result.serverPubkey).toBe('npub1abcdef123456');
+      expect(result.paymentMode).toBeUndefined();
       expect(result.unknownFlags).toEqual([]);
+    });
+
+    it('parses an explicit payment interaction mode', () => {
+      const transparent = __test__.parseUseArgs([
+        'npub1abcdef123456',
+        '--payment-mode',
+        'transparent',
+      ]);
+      expect(transparent.paymentMode).toBe('transparent');
+
+      const explicitGating = __test__.parseUseArgs([
+        'npub1abcdef123456',
+        '--payment-mode',
+        'explicit_gating',
+      ]);
+      expect(explicitGating.paymentMode).toBe('explicit_gating');
     });
 
     it('prefers --server-pubkey flag over positional', () => {
@@ -180,6 +197,27 @@ describe('CLI Argument Parsing', () => {
       expect(result.privateKey).toBe('abc123');
       expect(result.verbose).toBe(true);
       expect(result.serverPubkey).toBe('npub1server');
+    });
+  });
+
+  describe('parseCallArgs', () => {
+    it('forwards every parsed output and timeout option to the call implementation', () => {
+      const parsed = __test__.parseCallArgs([
+        'npub1server',
+        'read_media_file',
+        '--pretty-raw',
+        '--extract',
+        'content[0].data',
+        '--timeout',
+        '45000',
+      ]);
+
+      expect(__test__.toCallOptions(parsed)).toMatchObject({
+        raw: true,
+        prettyRaw: true,
+        extract: 'content[0].data',
+        timeout: 45000,
+      });
     });
   });
 

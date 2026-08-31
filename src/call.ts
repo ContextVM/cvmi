@@ -1,8 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import type { Progress, Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult, Progress, Tool } from '@modelcontextprotocol/sdk/types.js';
 import { PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
 import { NostrClientTransport } from '@contextvm/sdk/transport';
-import { nip19 } from 'nostr-tools';
+import { nip19, SimplePool } from 'nostr-tools';
 import {
   loadConfig,
   loadCallPrivateKeyFromEnv,
@@ -15,6 +15,11 @@ import { generatePrivateKey, normalizePrivateKey, normalizePublicKey } from './u
 import { BOLD, CYAN, DIM, RESET, TEXT, YELLOW } from './constants/ui.ts';
 import { renderDefaultResult } from './call/render-result.ts';
 import { renderSchemaProperties, renderToolSchema } from './call/render-schema.ts';
+import {
+  announcementHexPubkey,
+  announcementSupportsEncryption,
+  SERVER_ANNOUNCEMENT_KIND,
+} from './discover.ts';
 import {
   parseCapabilityPricing,
   formatPrice,
@@ -30,6 +35,11 @@ import {
 import { PAYMENT_REQUIRED_ERROR_CODE } from '@contextvm/sdk/payments/constants';
 
 const HEX_PUBKEY_PATTERN = /^[0-9a-f]{64}$/i;
+const ENCRYPTION_DISCOVERY_TIMEOUT_MS = 4000;
+const MAX_STREAM_DRAIN_GRACE_MS = 30000;
+export const DEFAULT_CALL_TIMEOUT_MS = 60000;
+export const DEFAULT_CALL_MAX_TOTAL_TIMEOUT_MS = 300000;
+const MAX_CALL_TIMEOUT_MS = 2147483647;
 
 export class ExplicitGatingError extends Error {
   constructor(public readonly data: any) {
@@ -58,6 +68,8 @@ export interface CallOptions {
   extract?: string;
   help?: boolean;
   paymentMode?: PaymentInteractionMode;
+  timeout?: number;
+  openStream?: boolean;
 }
 
 export interface ParseCallResult {
@@ -78,6 +90,7 @@ export interface ParseCallResult {
   config: string | undefined;
   unknownFlags: string[];
   paymentMode: PaymentInteractionMode;
+  timeout: number | undefined;
 }
 
 interface ResolvedServerTarget {
@@ -141,6 +154,7 @@ export function parseCallArgs(args: string[]): ParseCallResult {
     config: undefined,
     unknownFlags: [],
     paymentMode: 'transparent',
+    timeout: undefined,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -196,6 +210,21 @@ export function parseCallArgs(args: string[]): ParseCallResult {
         result.paymentMode = value;
       } else {
         result.unknownFlags.push(`--payment-mode${value ? ` (${value})` : ''}`);
+      }
+    } else if (arg === '--timeout') {
+      const value = consumeValue('--timeout');
+      if (value !== undefined) {
+        const timeout = Number(value);
+        if (
+          /^\d+$/.test(value) &&
+          Number.isSafeInteger(timeout) &&
+          timeout > 0 &&
+          timeout <= MAX_CALL_TIMEOUT_MS
+        ) {
+          result.timeout = timeout;
+        } else {
+          result.unknownFlags.push(`--timeout (${value})`);
+        }
       }
     } else if (arg.startsWith('--')) {
       result.unknownFlags.push(arg);
@@ -280,7 +309,10 @@ function getDisplayRelays(target: ResolvedServerTarget): string[] {
   try {
     const decoded = nip19.decode(target.server);
     if (decoded.type === 'nprofile') {
-      return decoded.data.relays ?? [];
+      const profileRelays = decoded.data.relays ?? [];
+      if (profileRelays.length > 0) {
+        return profileRelays;
+      }
     }
   } catch {
     // Fall back below when the server identity is not a decodable nprofile.
@@ -289,9 +321,66 @@ function getDisplayRelays(target: ResolvedServerTarget): string[] {
   return DEFAULT_RELAYS;
 }
 
+type EncryptionSupportLookup = (
+  target: ResolvedServerTarget,
+  maxWaitMs: number
+) => Promise<boolean | undefined>;
+
+async function lookupServerEncryptionSupport(
+  target: ResolvedServerTarget,
+  maxWaitMs: number
+): Promise<boolean | undefined> {
+  const relays = getDisplayRelays(target);
+  if (relays.length === 0) return undefined;
+
+  const pool = new SimplePool();
+  try {
+    const events = await pool.querySync(
+      relays,
+      {
+        kinds: [SERVER_ANNOUNCEMENT_KIND],
+        authors: [announcementHexPubkey(target.server)],
+      },
+      { maxWait: maxWaitMs }
+    );
+    const latest = events.sort((left, right) => right.created_at - left.created_at)[0];
+    return latest ? announcementSupportsEncryption(latest) : undefined;
+  } finally {
+    pool.close(relays);
+  }
+}
+
+async function resolveEffectiveEncryptionMode(
+  target: ResolvedServerTarget,
+  maxWaitMs: number,
+  lookup: EncryptionSupportLookup = lookupServerEncryptionSupport
+): Promise<EncryptionMode> {
+  if (target.encryption === EncryptionMode.DISABLED) {
+    return EncryptionMode.DISABLED;
+  }
+
+  let supportsEncryption: boolean | undefined;
+  try {
+    supportsEncryption = await lookup(target, maxWaitMs);
+  } catch {
+    return target.encryption;
+  }
+
+  if (supportsEncryption === false) {
+    if (target.encryption === EncryptionMode.REQUIRED) {
+      throw new Error(
+        'Server announcement does not advertise encryption support, but encryption is required.'
+      );
+    }
+    return EncryptionMode.DISABLED;
+  }
+
+  return target.encryption;
+}
+
 function logVerbose(enabled: boolean | undefined, message: string): void {
   if (enabled) {
-    console.log(message);
+    console.error(message);
   }
 }
 
@@ -313,7 +402,7 @@ function createProgressHandler(
   return (progress: Progress): void => {
     const summary = formatProgressValue(progress);
     const message = typeof progress.message === 'string' ? ` ${progress.message}` : '';
-    console.log(`${DIM}Progress:${RESET} ${summary}${message}`);
+    console.error(`${DIM}Progress:${RESET} ${summary}${message}`);
   };
 }
 
@@ -415,6 +504,202 @@ function printExtractedResult(result: unknown, path: string): void {
   printRawResult(extracted, false);
 }
 
+function isToolErrorResult(result: unknown): boolean {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    (result as { isError?: unknown }).isError === true
+  );
+}
+
+interface StreamChunk {
+  chunkIndex: number;
+  value: string;
+}
+
+interface StreamSession {
+  readonly isActive?: boolean;
+  abort(reason?: string): Promise<void>;
+  dispose(): void;
+  [Symbol.asyncIterator](): AsyncIterator<StreamChunk>;
+}
+
+type ToolResultOutcome =
+  { type: 'result'; value: CallToolResult } | { type: 'error'; error: unknown };
+
+function parseStreamChunkValue(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function parseChatCompletionChunk(value: unknown): {
+  recognized: boolean;
+  text?: string;
+} {
+  if (typeof value !== 'object' || value === null) return { recognized: false };
+  if ((value as Record<string, unknown>).object !== 'chat.completion.chunk') {
+    return { recognized: false };
+  }
+
+  const choices = (value as Record<string, unknown>).choices;
+  if (!Array.isArray(choices)) return { recognized: true };
+  const firstChoice = choices[0];
+  if (typeof firstChoice !== 'object' || firstChoice === null) return { recognized: true };
+  const delta = (firstChoice as Record<string, unknown>).delta;
+  if (typeof delta !== 'object' || delta === null) return { recognized: true };
+  const content = (delta as Record<string, unknown>).content;
+  return {
+    recognized: true,
+    ...(typeof content === 'string' ? { text: content } : {}),
+  };
+}
+
+function renderStreamChunk(
+  chunk: StreamChunk,
+  options: CallOptions,
+  inlineTextOpen: boolean
+): boolean {
+  if (options.extract) return inlineTextOpen;
+
+  const value = parseStreamChunkValue(chunk.value);
+  if (options.raw) {
+    printRawResult(
+      {
+        type: 'chunk',
+        chunkIndex: chunk.chunkIndex,
+        value,
+      },
+      options.prettyRaw ?? false
+    );
+    return false;
+  }
+
+  const completionChunk = parseChatCompletionChunk(value);
+  if (completionChunk.recognized) {
+    if (completionChunk.text) {
+      process.stdout.write(completionChunk.text);
+      return true;
+    }
+    return inlineTextOpen;
+  }
+
+  if (inlineTextOpen) process.stdout.write('\n');
+  console.log(chunk.value);
+  return false;
+}
+
+function resolveRequestTimeouts(options: CallOptions): {
+  timeout: number;
+  maxTotalTimeout: number;
+} {
+  return {
+    timeout: options.timeout ?? DEFAULT_CALL_TIMEOUT_MS,
+    maxTotalTimeout: options.timeout ?? DEFAULT_CALL_MAX_TOTAL_TIMEOUT_MS,
+  };
+}
+
+/** Race a promise against a drain deadline; the timer is always cleared. */
+function raceDrain<T>(promise: Promise<T>, graceMs: number): Promise<T | { type: 'drained' }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const drain = new Promise<{ type: 'drained' }>((resolve) => {
+    timer = setTimeout(() => resolve({ type: 'drained' }), graceMs);
+  });
+  return Promise.race([promise, drain]).finally(() => clearTimeout(timer));
+}
+
+async function callStreamingTool(
+  remote: RemoteClient,
+  toolName: string,
+  input: Record<string, unknown>,
+  options: CallOptions
+): Promise<CallToolResult> {
+  const pendingSession = remote.transport.prepareOutboundOpenStreamSession();
+  const sessionOutcome = pendingSession.then(
+    (value) => ({ type: 'session' as const, value }),
+    (error: unknown) => ({ type: 'error' as const, error })
+  );
+  const requestTimeouts = resolveRequestTimeouts(options);
+  const resultPromise = remote.client.callTool({ name: toolName, arguments: input }, undefined, {
+    onprogress: createProgressHandler(options.verbose),
+    resetTimeoutOnProgress: true,
+    ...requestTimeouts,
+  }) as Promise<CallToolResult>;
+  const resultOutcome: Promise<ToolResultOutcome> = resultPromise.then(
+    (value) => ({ type: 'result', value }),
+    (error: unknown) => ({ type: 'error', error })
+  );
+  // A request can fail before the transport has paired its CEP-41 session.
+  // Race setup so that path surfaces immediately instead of waiting forever.
+  const setup = await Promise.race([sessionOutcome, resultOutcome]);
+  if (setup.type === 'error') throw setup.error;
+  if (setup.type === 'result') return setup.value;
+
+  const stream = setup.value.stream as StreamSession;
+  const iterator = stream[Symbol.asyncIterator]();
+  const drainGraceMs = Math.min(requestTimeouts.timeout, MAX_STREAM_DRAIN_GRACE_MS);
+  let terminalResult: CallToolResult | undefined;
+  let sawChunk = false;
+  let inlineTextOpen = false;
+  let pendingNext:
+    | Promise<
+        { type: 'next'; value: IteratorResult<StreamChunk> } | { type: 'error'; error: unknown }
+      >
+    | undefined;
+
+  try {
+    while (true) {
+      pendingNext ??= iterator.next().then(
+        (value) => ({ type: 'next' as const, value }),
+        (error: unknown) => ({ type: 'error' as const, error })
+      );
+      // ponytail: after the terminal result, drain is best-effort — a zero-tick
+      // grace can drop an in-flight first chunk (the result is authoritative
+      // anyway), and a stuck iterator is bounded by the grace deadline instead
+      // of hanging the CLI forever.
+      const outcome = terminalResult
+        ? await raceDrain(pendingNext, sawChunk ? drainGraceMs : 0)
+        : await Promise.race([pendingNext, resultOutcome]);
+
+      if (outcome.type === 'error') throw outcome.error;
+      if (outcome.type === 'result') {
+        if (isToolErrorResult(outcome.value)) {
+          if (inlineTextOpen) process.stdout.write('\n');
+          return outcome.value;
+        }
+        terminalResult = outcome.value;
+        continue;
+      }
+      if (outcome.type === 'drained') {
+        if (inlineTextOpen) process.stdout.write('\n');
+        return terminalResult!;
+      }
+      pendingNext = undefined;
+      if (outcome.value.done) {
+        if (inlineTextOpen) process.stdout.write('\n');
+        return await resultPromise;
+      }
+
+      sawChunk = true;
+      inlineTextOpen = renderStreamChunk(outcome.value.value, options, inlineTextOpen);
+    }
+  } catch (error) {
+    if (inlineTextOpen) process.stdout.write('\n');
+    if (sawChunk && stream.isActive !== false) {
+      try {
+        await stream.abort(error instanceof Error ? error.message : String(error));
+      } catch {
+        // Preserve the original call/stream failure.
+      }
+    }
+    throw error;
+  } finally {
+    stream.dispose();
+  }
+}
+
 function formatSchemaTypeCompact(schema: Record<string, unknown> | undefined): string {
   if (!schema) return 'unknown';
 
@@ -512,6 +797,9 @@ export const __test__ = {
   printToolHelp,
   printAliasSummaries,
   isPaymentRequiredError,
+  getDisplayRelays,
+  announcementSupportsEncryption,
+  resolveEffectiveEncryptionMode,
 };
 
 type RemoteClientFactory = typeof createRemoteClient;
@@ -519,9 +807,14 @@ type RemoteClient = Awaited<ReturnType<typeof createRemoteClient>>;
 
 /** List tools + advertised pricing in one round-trip; always fetched together. */
 async function discoverTools(
-  remote: RemoteClient
+  remote: RemoteClient,
+  timeoutMs: number,
+  maxTotalTimeoutMs: number
 ): Promise<{ tools: Tool[]; pricing: CapabilityPricing }> {
-  const toolsResult = await remote.client.listTools();
+  const toolsResult = await remote.client.listTools(undefined, {
+    timeout: timeoutMs,
+    maxTotalTimeout: maxTotalTimeoutMs,
+  });
   const pricing = parseCapabilityPricing(
     remote.transport.getServerToolsListEvent() ?? remote.transport.getServerInitializeEvent()
   );
@@ -546,15 +839,32 @@ async function createRemoteClient(target: ResolvedServerTarget, options: CallOpt
 
   privateKey = normalizePrivateKey(privateKey);
 
+  const { timeout: timeoutMs, maxTotalTimeout: maxTotalTimeoutMs } =
+    resolveRequestTimeouts(options);
+  // Only stateless calls (the default) probe: they never send an initialize
+  // handshake, so the announcement is the only pre-flight signal. Stateful
+  // connections learn capabilities during the handshake — skip the extra
+  // relay roundtrip.
+  const encryptionMode = target.isStateless
+    ? await resolveEffectiveEncryptionMode(
+        target,
+        Math.min(timeoutMs, ENCRYPTION_DISCOVERY_TIMEOUT_MS)
+      )
+    : target.encryption;
+  if (encryptionMode !== target.encryption) {
+    logVerbose(options.verbose, 'Server does not advertise encryption; using unencrypted mode.');
+  }
+
   const signer = new PrivateKeySigner(privateKey);
   const transport = new NostrClientTransport({
     signer,
     relayHandler: target.relays ?? [],
     serverPubkey: target.server,
     discoveryRelayUrls: DEFAULT_RELAYS,
-    encryptionMode: target.encryption,
+    encryptionMode,
     isStateless: target.isStateless,
     logLevel: options.debug ? 'debug' : 'silent',
+    openStream: options.openStream ? { enabled: true } : undefined,
   });
 
   // PMI-agnostic: advertise no handlers, so the server sends
@@ -568,7 +878,10 @@ async function createRemoteClient(target: ResolvedServerTarget, options: CallOpt
   client.setNotificationHandler(paymentRequiredNotificationSchema, (notification) =>
     renderPaymentRequired(notification.params)
   );
-  await client.connect(paidTransport);
+  await client.connect(paidTransport, {
+    timeout: timeoutMs,
+    maxTotalTimeout: maxTotalTimeoutMs,
+  });
 
   return {
     client,
@@ -805,7 +1118,7 @@ export async function call(
   capabilityArg: string | undefined,
   input: Record<string, unknown>,
   options: CallOptions
-): Promise<void> {
+): Promise<number> {
   // LOG_ENABLED isn't set here: the SDK logger is an import-time singleton, so
   // a runtime assignment is a no-op. The client-payments info logs that used
   // to bracket the invoice only fired on the handler path we no longer take
@@ -826,52 +1139,66 @@ export async function call(
   const serverInput = serverArg ?? useConfig.serverPubkey;
   if (!serverInput) {
     await showCallHelp(options.config);
-    process.exit(1);
+    return 1;
   }
 
   assertKnownServerInput(config, serverInput);
   const target = resolveServerTarget(config, serverInput, options);
+  const requestTimeouts = resolveRequestTimeouts(options);
+  const isStreamingCall = input.stream === true;
   logVerbose(options.verbose, `Connecting to ${target.aliasName ?? target.server}...`);
   const remote = await createRemoteClientFactory(target, {
     ...options,
     privateKey: options.privateKey ?? loadCallPrivateKeyFromEnv(),
+    openStream: isStreamingCall,
   });
 
   try {
     if (!capabilityArg) {
       logVerbose(options.verbose, 'Discovering tools...');
-      const { tools, pricing } = await discoverTools(remote);
+      const { tools, pricing } = await discoverTools(
+        remote,
+        requestTimeouts.timeout,
+        requestTimeouts.maxTotalTimeout
+      );
       printServerHelp(target, tools, remote.metadata, options, pricing);
-      return;
+      return 0;
     }
 
     const toolName = resolveToolName(capabilityArg);
     if (options.help) {
       logVerbose(options.verbose, 'Discovering tools...');
-      const { tools, pricing } = await discoverTools(remote);
+      const { tools, pricing } = await discoverTools(
+        remote,
+        requestTimeouts.timeout,
+        requestTimeouts.maxTotalTimeout
+      );
       const tool = tools.find((entry) => entry.name === toolName);
       if (!tool) {
         printMissingToolGuidance(target, capabilityArg, tools, remote.metadata, options, pricing);
-        process.exit(1);
+        return 1;
       }
       printToolHelp(target, tool, pricing);
-      return;
+      return 0;
     }
 
     logVerbose(options.verbose, `Calling tool: ${toolName}`);
     let result;
     try {
-      result = await remote.client.callTool(
-        {
-          name: toolName,
-          arguments: input,
-        },
-        undefined,
-        {
-          onprogress: createProgressHandler(options.verbose),
-          resetTimeoutOnProgress: true,
-        }
-      );
+      result = isStreamingCall
+        ? await callStreamingTool(remote, toolName, input, options)
+        : await remote.client.callTool(
+            {
+              name: toolName,
+              arguments: input,
+            },
+            undefined,
+            {
+              onprogress: createProgressHandler(options.verbose),
+              resetTimeoutOnProgress: true,
+              ...requestTimeouts,
+            }
+          );
     } catch (error) {
       if (!isMissingToolInvocationError(error)) {
         if (options.paymentMode === 'explicit_gating' && isPaymentRequiredError(error)) {
@@ -881,22 +1208,30 @@ export async function call(
       }
 
       logVerbose(options.verbose, 'Discovering tools...');
-      const { tools, pricing } = await discoverTools(remote);
+      const { tools, pricing } = await discoverTools(
+        remote,
+        requestTimeouts.timeout,
+        requestTimeouts.maxTotalTimeout
+      );
       printMissingToolGuidance(target, capabilityArg, tools, remote.metadata, options, pricing);
-      process.exit(1);
+      return 1;
     }
 
     if (options.extract) {
       printExtractedResult(result, options.extract);
-      return;
+      return isToolErrorResult(result) ? 1 : 0;
     }
 
     if (options.raw) {
-      printRawResult(result, options.prettyRaw ?? false);
-      return;
+      printRawResult(
+        isStreamingCall ? { type: 'result', value: result } : result,
+        options.prettyRaw ?? false
+      );
+      return isToolErrorResult(result) ? 1 : 0;
     }
 
     renderDefaultResult(result);
+    return isToolErrorResult(result) ? 1 : 0;
   } finally {
     await remote.close();
   }
@@ -930,6 +1265,7 @@ ${BOLD}Options:${RESET}
   --relays <urls>         Comma-separated relay URLs
   --encryption-mode       Encryption mode: optional, required, disabled
   --payment-mode          Payment interaction mode: transparent (default), explicit_gating
+  --timeout <ms>          Request timeout; caps both idle and total time (defaults: 60s idle / 5m total)
   --stateless             Enable stateless transport mode (default)
   --stateful              Disable stateless transport mode
   --details               Show resolved server identity and relay details during inspection
@@ -945,6 +1281,8 @@ ${BOLD}Private key:${RESET}
 
 ${BOLD}Tool input:${RESET}
   Use key=value arguments. Quote the full argument when passing JSON values, e.g. 'filters={"kinds":[1],"limit":10}'
+  Passing stream=true consumes CEP-41 output. Raw streaming output is emitted as JSON records,
+  with one record per chunk followed by the terminal MCP result.
 
 ${BOLD}Aliases & config:${RESET}
   Priority: CLI > custom config (--config) > project .cvmi.json > global ~/.cvmi/config.json > env vars
@@ -963,7 +1301,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi call weather get_current --help
   ${DIM}$${RESET} cvmi call weather get_current city=Lisbon
   ${DIM}$${RESET} cvmi call weather get_current city=Lisbon --raw
-  ${DIM}$${RESET} cvmi call files read_media_file path=./img.jpg --extract content[0].data
+  ${DIM}$${RESET} cvmi call files read_media_file path=./img.jpg --extract 'content[0].data'
   `);
 
   printAliasSummaries(aliases);
