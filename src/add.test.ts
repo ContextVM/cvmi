@@ -313,57 +313,87 @@ describe('shouldInstallInternalSkills', () => {
 
 describe('parseAddOptions', () => {
   it('should parse --all flag', () => {
-    const result = parseAddOptions(['source', '--all']);
-    expect(result.source).toEqual(['source']);
+    const result = parseAddOptions(['owner/repo', '--all']);
+    expect(result.source).toEqual(['owner/repo']);
     expect(result.options.all).toBe(true);
   });
 
   it('should parse --skill with wildcard', () => {
-    const result = parseAddOptions(['source', '--skill', '*']);
-    expect(result.source).toEqual(['source']);
+    const result = parseAddOptions(['owner/repo', '--skill', '*']);
+    expect(result.source).toEqual(['owner/repo']);
     expect(result.options.skill).toEqual(['*']);
   });
 
   it('should parse --agent with wildcard', () => {
-    const result = parseAddOptions(['source', '--agent', '*']);
-    expect(result.source).toEqual(['source']);
+    const result = parseAddOptions(['owner/repo', '--agent', '*']);
+    expect(result.source).toEqual(['owner/repo']);
     expect(result.options.agent).toEqual(['*']);
   });
 
   it('should parse --skill wildcard with specific agents', () => {
-    const result = parseAddOptions(['source', '--skill', '*', '--agent', 'claude-code']);
-    expect(result.source).toEqual(['source']);
+    const result = parseAddOptions(['owner/repo', '--skill', '*', '--agent', 'claude-code']);
+    expect(result.source).toEqual(['owner/repo']);
     expect(result.options.skill).toEqual(['*']);
     expect(result.options.agent).toEqual(['claude-code']);
   });
 
   it('should parse --agent wildcard with specific skills', () => {
-    const result = parseAddOptions(['source', '--agent', '*', '--skill', 'my-skill']);
-    expect(result.source).toEqual(['source']);
+    const result = parseAddOptions(['owner/repo', '--agent', '*', '--skill', 'my-skill']);
+    expect(result.source).toEqual(['owner/repo']);
     expect(result.options.agent).toEqual(['*']);
     expect(result.options.skill).toEqual(['my-skill']);
   });
 
   it('should parse combined flags with wildcards', () => {
-    const result = parseAddOptions(['source', '-g', '--skill', '*', '-y']);
-    expect(result.source).toEqual(['source']);
+    const result = parseAddOptions(['owner/repo', '-g', '--skill', '*', '-y']);
+    expect(result.source).toEqual(['owner/repo']);
     expect(result.options.global).toBe(true);
     expect(result.options.skill).toEqual(['*']);
     expect(result.options.yes).toBe(true);
   });
 
   it('should parse --full-depth flag', () => {
-    const result = parseAddOptions(['source', '--full-depth']);
-    expect(result.source).toEqual(['source']);
+    const result = parseAddOptions(['owner/repo', '--full-depth']);
+    expect(result.source).toEqual(['owner/repo']);
     expect(result.options.fullDepth).toBe(true);
   });
 
   it('should parse --full-depth with other flags', () => {
-    const result = parseAddOptions(['source', '--full-depth', '--list', '-g']);
-    expect(result.source).toEqual(['source']);
+    const result = parseAddOptions(['owner/repo', '--full-depth', '--list', '-g']);
+    expect(result.source).toEqual(['owner/repo']);
     expect(result.options.fullDepth).toBe(true);
     expect(result.options.list).toBe(true);
     expect(result.options.global).toBe(true);
+  });
+
+  it('should treat a bare skill name as --skill, not a git source', () => {
+    const result = parseAddOptions(['overview']);
+    expect(result.source).toEqual([]);
+    expect(result.options.skill).toEqual(['overview']);
+  });
+
+  it('should treat multiple bare skill names as --skill values', () => {
+    const result = parseAddOptions(['overview', 'server-dev', 'payments']);
+    expect(result.source).toEqual([]);
+    expect(result.options.skill).toEqual(['overview', 'server-dev', 'payments']);
+  });
+
+  it('should still accept --skill after promoting a bare name', () => {
+    const result = parseAddOptions(['overview', '--skill', 'payments']);
+    expect(result.source).toEqual([]);
+    expect(result.options.skill).toEqual(['payments', 'overview']);
+  });
+
+  it('should keep owner/repo tokens as a source', () => {
+    const result = parseAddOptions(['contextvm/cvmi']);
+    expect(result.source).toEqual(['contextvm/cvmi']);
+    expect(result.options.skill).toBeUndefined();
+  });
+
+  it('should keep local paths as a source', () => {
+    const result = parseAddOptions(['./skills']);
+    expect(result.source).toEqual(['./skills']);
+    expect(result.options.skill).toBeUndefined();
   });
 });
 
