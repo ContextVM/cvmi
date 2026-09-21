@@ -1526,7 +1526,7 @@ export async function runAdd(
         console.log();
       }
 
-      p.outro('Use --skill <name> to install specific skills');
+      p.outro('Use cvmi add <name> to install specific skills');
       await cleanup(tempDir);
       process.exit(0);
     }
@@ -2074,5 +2074,16 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
     }
   }
 
+  // Bare identifiers are skill names (`cvmi add overview`), not git sources.
+  // Real sources use a slash, URL, or path (`owner/repo`, `./skills`, `https://...`).
+  if (source.length > 0 && source.every(isBareSkillName)) {
+    options.skill = [...(options.skill ?? []), ...source];
+    source.length = 0;
+  }
+
   return { source, options };
+}
+
+function isBareSkillName(token: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(token);
 }

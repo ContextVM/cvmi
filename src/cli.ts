@@ -116,7 +116,7 @@ ${BOLD}Quick start:${RESET}
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi add                          ${DIM}# install embedded ContextVM skills${RESET}
-  ${DIM}$${RESET} cvmi add --skill overview         ${DIM}# install a specific skill${RESET}
+  ${DIM}$${RESET} cvmi add overview                 ${DIM}# install a specific skill${RESET}
   ${DIM}$${RESET} cvmi remove <skill>               ${DIM}# remove an installed skill${RESET}
   ${DIM}$${RESET} cvmi serve -- <command-or-url>    ${DIM}# start gateway, expose an already existing server (stdio or http) over nostr${RESET}
   ${DIM}$${RESET} cvmi use <server-pubkey>          ${DIM}# connect to remote MCP server, expose it as stdio${RESET}

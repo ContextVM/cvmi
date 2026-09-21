@@ -11,13 +11,13 @@
 npx cvmi add
 
 # Install a specific skill from the ContextVM repository
-npx cvmi add --skill overview
+npx cvmi add overview
 ```
 
 ## Roadmap
 
 - [x] `cvmi add` - Install skills with interactive picker
-- [x] `cvmi add --skill <name>` - Install specific skills
+- [x] `cvmi add <skill>` - Install specific skills
 - [x] `cvmi serve` - Expose a server (gateway)
 - [x] `cvmi use` - Use a server from nostr as stdio (proxy)
 - [x] `cvmi discover` - Discover announced servers on relays
