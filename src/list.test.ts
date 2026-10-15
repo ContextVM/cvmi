@@ -157,9 +157,19 @@ description: A project skill
 `
       );
 
-      const result = runCli(['list', '-g'], testDir);
-      // Should not show project skill when -g is specified
+      // Own the global fixture instead of depending on the developer's profile.
+      const home = join(testDir, 'isolated-home');
+      const globalSkill = join(home, '.agents', 'skills', 'global-fixture-skill');
+      mkdirSync(globalSkill, { recursive: true });
+      writeFileSync(
+        join(globalSkill, 'SKILL.md'),
+        '---\nname: global-fixture-skill\ndescription: Isolated global fixture\n---\n# Global fixture\n'
+      );
+      const result = runCli(['list', '-g'], testDir, { HOME: home, USERPROFILE: home });
+      // The global fixture must be shown, and the project fixture must not leak in.
+      expect(result.exitCode).toBe(0);
       expect(result.stdout).not.toContain('project-skill');
+      expect(result.stdout).toContain('global-fixture-skill');
       expect(result.stdout).toContain('Global Skills');
     });
 
