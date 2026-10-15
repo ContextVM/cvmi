@@ -8,6 +8,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   loadConfigFromEnv,
   loadCallPrivateKeyFromEnv,
@@ -224,18 +227,21 @@ describe('getConfigPaths with custom config', () => {
 
 describe('savePrivateKeyToEnv', () => {
   const originalCwd = process.cwd();
-  const testDir = '/tmp/cvmi-test-env';
+  let testDir: string | undefined;
 
   beforeEach(async () => {
-    // Create test directory
-    await import('fs/promises').then((fs) => fs.mkdir(testDir, { recursive: true }));
+    // Own a fresh temporary directory on every platform and in parallel CI jobs.
+    testDir = await mkdtemp(join(tmpdir(), 'cvmi-test-env-'));
     process.chdir(testDir);
   });
 
   afterEach(async () => {
     // Clean up test directory
     process.chdir(originalCwd);
-    await import('fs/promises').then((fs) => fs.rm(testDir, { recursive: true, force: true }));
+    if (testDir) {
+      await import('fs/promises').then((fs) => fs.rm(testDir!, { recursive: true, force: true }));
+      testDir = undefined;
+    }
   });
 
   it('saves serve private key to .env file', async () => {

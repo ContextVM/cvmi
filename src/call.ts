@@ -1,8 +1,9 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { Progress, Tool } from '@modelcontextprotocol/sdk/types.js';
-import { PrivateKeySigner, EncryptionMode } from '@contextvm/sdk';
+import { PrivateKeySigner, EncryptionMode, GiftWrapMode } from '@contextvm/sdk';
 import { NostrClientTransport } from '@contextvm/sdk/transport';
 import { nip19 } from 'nostr-tools';
+import { resolveInitialWrap } from './announcement.ts';
 import {
   loadConfig,
   loadCallPrivateKeyFromEnv,
@@ -49,6 +50,8 @@ export interface CallOptions {
   privateKey?: string;
   relays?: string[];
   encryption?: EncryptionMode;
+  giftWrapMode?: GiftWrapMode;
+  autoGiftWrap?: boolean;
   isStateless?: boolean;
   showServerDetails?: boolean;
   debug?: boolean;
@@ -73,6 +76,8 @@ export interface ParseCallResult {
   privateKey: string | undefined;
   relays: string[] | undefined;
   encryption: EncryptionMode | undefined;
+  giftWrapMode: GiftWrapMode | undefined;
+  autoGiftWrap: boolean | undefined;
   isStateless: boolean | undefined;
   showServerDetails: boolean;
   config: string | undefined;
@@ -85,6 +90,8 @@ interface ResolvedServerTarget {
   server: string;
   relays?: string[];
   encryption: EncryptionMode;
+  giftWrapMode?: GiftWrapMode;
+  autoGiftWrap?: boolean;
   isStateless: boolean;
   aliasName?: string;
   description?: string;
@@ -103,6 +110,14 @@ interface CompactAliasSummary {
 }
 
 type ExtractPathSegment = string | number;
+
+function isGiftWrapMode(value: unknown): value is GiftWrapMode {
+  return (
+    value === GiftWrapMode.OPTIONAL ||
+    value === GiftWrapMode.PERSISTENT ||
+    value === GiftWrapMode.EPHEMERAL
+  );
+}
 
 function coerceValue(value: string): unknown {
   if (value === 'true') return true;
@@ -136,6 +151,8 @@ export function parseCallArgs(args: string[]): ParseCallResult {
     privateKey: undefined,
     relays: undefined,
     encryption: undefined,
+    giftWrapMode: undefined,
+    autoGiftWrap: undefined,
     isStateless: undefined,
     showServerDetails: false,
     config: undefined,
@@ -182,6 +199,18 @@ export function parseCallArgs(args: string[]): ParseCallResult {
       else if (value === 'disabled') result.encryption = EncryptionMode.DISABLED;
       else if (value === 'optional') result.encryption = EncryptionMode.OPTIONAL;
       else result.unknownFlags.push(`--encryption-mode${value ? ` (${value})` : ''}`);
+    } else if (arg === '--auto-gift-wrap') {
+      result.autoGiftWrap = true;
+    } else if (arg === '--no-auto-gift-wrap') {
+      result.autoGiftWrap = false;
+    } else if (arg === '--gift-wrap-mode') {
+      const value = consumeValue('--gift-wrap-mode');
+      if (isGiftWrapMode(value)) result.giftWrapMode = value;
+      else if (value !== undefined) {
+        result.unknownFlags.push(
+          `--gift-wrap-mode (${value}; expected optional, persistent, or ephemeral)`
+        );
+      }
     } else if (arg === '--config') {
       result.config = consumeValue('--config');
     } else if (arg === '--stateless') {
@@ -233,6 +262,13 @@ function resolveServerTarget(
   const configuredStateless = config.use?.isStateless;
   const resolvedServer = alias?.pubkey ?? serverInput;
   const isNprofileIdentity = resolvedServer.startsWith('nprofile');
+  const giftWrapMode = options.giftWrapMode ?? alias?.giftWrapMode ?? configuredUse.giftWrapMode;
+  const autoGiftWrap = options.autoGiftWrap ?? alias?.autoGiftWrap ?? configuredUse.autoGiftWrap;
+  if (autoGiftWrap !== undefined && typeof autoGiftWrap !== 'boolean')
+    throw new Error('Invalid autoGiftWrap: expected boolean.');
+  if (giftWrapMode !== undefined && !isGiftWrapMode(giftWrapMode)) {
+    throw new Error('Invalid giftWrapMode: expected optional, persistent, or ephemeral.');
+  }
 
   return {
     input: serverInput,
@@ -244,6 +280,8 @@ function resolveServerTarget(
       (isNprofileIdentity ? undefined : (useConfig.relays ?? DEFAULT_RELAYS)),
     encryption:
       options.encryption ?? alias?.encryption ?? useConfig.encryption ?? EncryptionMode.OPTIONAL,
+    giftWrapMode,
+    autoGiftWrap,
     isStateless: options.isStateless ?? alias?.isStateless ?? configuredStateless ?? true,
     aliasName: alias ? serverInput : undefined,
     description: alias?.description,
@@ -539,6 +577,17 @@ export function resetCreateRemoteClientFactoryForTests(): void {
 }
 
 async function createRemoteClient(target: ResolvedServerTarget, options: CallOptions) {
+  // Resolve raw signed metadata before creating a signing identity or sending MCP.
+  const selected = await resolveInitialWrap({
+    target: target.server,
+    relays: target.relays ?? getDisplayRelays(target),
+    explicitMode: target.giftWrapMode,
+    autoEnabled: target.autoGiftWrap === true,
+    encryption: target.encryption,
+  });
+  if (options.verbose && selected.basis === 'signed_prehandshake_support') {
+    console.error(`Gift-wrap: ${selected.mode}; signed announcement ${selected.eventId}`);
+  }
   let privateKey = options.privateKey;
   if (!privateKey) {
     privateKey = generatePrivateKey();
@@ -553,6 +602,7 @@ async function createRemoteClient(target: ResolvedServerTarget, options: CallOpt
     serverPubkey: target.server,
     discoveryRelayUrls: DEFAULT_RELAYS,
     encryptionMode: target.encryption,
+    ...(selected.mode === undefined ? {} : { giftWrapMode: selected.mode }),
     isStateless: target.isStateless,
     logLevel: options.debug ? 'debug' : 'silent',
   });
@@ -568,7 +618,13 @@ async function createRemoteClient(target: ResolvedServerTarget, options: CallOpt
   client.setNotificationHandler(paymentRequiredNotificationSchema, (notification) =>
     renderPaymentRequired(notification.params)
   );
-  await client.connect(paidTransport);
+  try {
+    await client.connect(paidTransport);
+  } catch (error) {
+    await client.close().catch(() => {});
+    await transport.close().catch(() => {});
+    throw error;
+  }
 
   return {
     client,
@@ -929,6 +985,9 @@ ${BOLD}Options:${RESET}
   --private-key <key>     Your Nostr private key (hex/nsec format, overrides env, auto-generated if not provided)
   --relays <urls>         Comma-separated relay URLs
   --encryption-mode       Encryption mode: optional, required, disabled
+  --gift-wrap-mode <mode> Gift-wrap policy: optional, persistent, ephemeral (default: SDK policy)
+  --auto-gift-wrap        Verify current signed metadata before first send (requires encryption required)
+  --no-auto-gift-wrap     Disable automatic prehandshake lookup; explicit gift-wrap-mode always wins
   --payment-mode          Payment interaction mode: transparent (default), explicit_gating
   --stateless             Enable stateless transport mode (default)
   --stateful              Disable stateless transport mode
@@ -950,6 +1009,8 @@ ${BOLD}Aliases & config:${RESET}
   Priority: CLI > custom config (--config) > project .cvmi.json > global ~/.cvmi/config.json > env vars
   Use ${TEXT}cvmi config add <alias> <pubkey>${RESET} to save an alias, and ${TEXT}cvmi config list${RESET} to inspect available aliases
   Use ${TEXT}cvmi call <alias>${RESET} to inspect a server and ${TEXT}cvmi call <alias> <tool>${RESET} to invoke a tool
+  Gift-wrap policy: --gift-wrap-mode > servers.<alias>.giftWrapMode > use.giftWrapMode
+  Omit giftWrapMode to retain the SDK default. Ephemeral support alone does not imply an ephemeral-only server.
 
 ${BOLD}Payments (CEP-8):${RESET} only relevant when the server gates the called tool behind payment.
   --payment-mode transparent (default) | explicit_gating
@@ -963,6 +1024,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} cvmi call weather get_current --help
   ${DIM}$${RESET} cvmi call weather get_current city=Lisbon
   ${DIM}$${RESET} cvmi call weather get_current city=Lisbon --raw
+  ${DIM}$${RESET} cvmi call weather get_current city=Lisbon --encryption-mode required --gift-wrap-mode ephemeral
   ${DIM}$${RESET} cvmi call files read_media_file path=./img.jpg --extract content[0].data
   `);
 
