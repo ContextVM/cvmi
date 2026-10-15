@@ -1075,6 +1075,7 @@ async function main(): Promise<void> {
           encryption: parsed.encryption,
           isStateless: parsed.isStateless,
           giftWrapMode: parsed.giftWrapMode,
+          autoGiftWrap: parsed.autoGiftWrap,
           config: parsed.config,
           paymentMode: parsed.paymentMode,
         });

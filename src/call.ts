@@ -3,6 +3,7 @@ import type { Progress, Tool } from '@modelcontextprotocol/sdk/types.js';
 import { PrivateKeySigner, EncryptionMode, GiftWrapMode } from '@contextvm/sdk';
 import { NostrClientTransport } from '@contextvm/sdk/transport';
 import { nip19 } from 'nostr-tools';
+import { resolveInitialWrap } from './announcement.ts';
 import {
   loadConfig,
   loadCallPrivateKeyFromEnv,
@@ -50,6 +51,7 @@ export interface CallOptions {
   relays?: string[];
   encryption?: EncryptionMode;
   giftWrapMode?: GiftWrapMode;
+  autoGiftWrap?: boolean;
   isStateless?: boolean;
   showServerDetails?: boolean;
   debug?: boolean;
@@ -75,6 +77,7 @@ export interface ParseCallResult {
   relays: string[] | undefined;
   encryption: EncryptionMode | undefined;
   giftWrapMode: GiftWrapMode | undefined;
+  autoGiftWrap: boolean | undefined;
   isStateless: boolean | undefined;
   showServerDetails: boolean;
   config: string | undefined;
@@ -88,6 +91,7 @@ interface ResolvedServerTarget {
   relays?: string[];
   encryption: EncryptionMode;
   giftWrapMode?: GiftWrapMode;
+  autoGiftWrap?: boolean;
   isStateless: boolean;
   aliasName?: string;
   description?: string;
@@ -148,6 +152,7 @@ export function parseCallArgs(args: string[]): ParseCallResult {
     relays: undefined,
     encryption: undefined,
     giftWrapMode: undefined,
+    autoGiftWrap: undefined,
     isStateless: undefined,
     showServerDetails: false,
     config: undefined,
@@ -194,6 +199,10 @@ export function parseCallArgs(args: string[]): ParseCallResult {
       else if (value === 'disabled') result.encryption = EncryptionMode.DISABLED;
       else if (value === 'optional') result.encryption = EncryptionMode.OPTIONAL;
       else result.unknownFlags.push(`--encryption-mode${value ? ` (${value})` : ''}`);
+    } else if (arg === '--auto-gift-wrap') {
+      result.autoGiftWrap = true;
+    } else if (arg === '--no-auto-gift-wrap') {
+      result.autoGiftWrap = false;
     } else if (arg === '--gift-wrap-mode') {
       const value = consumeValue('--gift-wrap-mode');
       if (isGiftWrapMode(value)) result.giftWrapMode = value;
@@ -254,6 +263,9 @@ function resolveServerTarget(
   const resolvedServer = alias?.pubkey ?? serverInput;
   const isNprofileIdentity = resolvedServer.startsWith('nprofile');
   const giftWrapMode = options.giftWrapMode ?? alias?.giftWrapMode ?? configuredUse.giftWrapMode;
+  const autoGiftWrap = options.autoGiftWrap ?? alias?.autoGiftWrap ?? configuredUse.autoGiftWrap;
+  if (autoGiftWrap !== undefined && typeof autoGiftWrap !== 'boolean')
+    throw new Error('Invalid autoGiftWrap: expected boolean.');
   if (giftWrapMode !== undefined && !isGiftWrapMode(giftWrapMode)) {
     throw new Error('Invalid giftWrapMode: expected optional, persistent, or ephemeral.');
   }
@@ -269,6 +281,7 @@ function resolveServerTarget(
     encryption:
       options.encryption ?? alias?.encryption ?? useConfig.encryption ?? EncryptionMode.OPTIONAL,
     giftWrapMode,
+    autoGiftWrap,
     isStateless: options.isStateless ?? alias?.isStateless ?? configuredStateless ?? true,
     aliasName: alias ? serverInput : undefined,
     description: alias?.description,
@@ -564,6 +577,17 @@ export function resetCreateRemoteClientFactoryForTests(): void {
 }
 
 async function createRemoteClient(target: ResolvedServerTarget, options: CallOptions) {
+  // Resolve raw signed metadata before creating a signing identity or sending MCP.
+  const selected = await resolveInitialWrap({
+    target: target.server,
+    relays: target.relays ?? getDisplayRelays(target),
+    explicitMode: target.giftWrapMode,
+    autoEnabled: target.autoGiftWrap === true,
+    encryption: target.encryption,
+  });
+  if (options.verbose && selected.basis === 'signed_prehandshake_support') {
+    console.error(`Gift-wrap: ${selected.mode}; signed announcement ${selected.eventId}`);
+  }
   let privateKey = options.privateKey;
   if (!privateKey) {
     privateKey = generatePrivateKey();
@@ -578,7 +602,7 @@ async function createRemoteClient(target: ResolvedServerTarget, options: CallOpt
     serverPubkey: target.server,
     discoveryRelayUrls: DEFAULT_RELAYS,
     encryptionMode: target.encryption,
-    ...(target.giftWrapMode === undefined ? {} : { giftWrapMode: target.giftWrapMode }),
+    ...(selected.mode === undefined ? {} : { giftWrapMode: selected.mode }),
     isStateless: target.isStateless,
     logLevel: options.debug ? 'debug' : 'silent',
   });
@@ -594,7 +618,13 @@ async function createRemoteClient(target: ResolvedServerTarget, options: CallOpt
   client.setNotificationHandler(paymentRequiredNotificationSchema, (notification) =>
     renderPaymentRequired(notification.params)
   );
-  await client.connect(paidTransport);
+  try {
+    await client.connect(paidTransport);
+  } catch (error) {
+    await client.close().catch(() => {});
+    await transport.close().catch(() => {});
+    throw error;
+  }
 
   return {
     client,
@@ -956,6 +986,8 @@ ${BOLD}Options:${RESET}
   --relays <urls>         Comma-separated relay URLs
   --encryption-mode       Encryption mode: optional, required, disabled
   --gift-wrap-mode <mode> Gift-wrap policy: optional, persistent, ephemeral (default: SDK policy)
+  --auto-gift-wrap        Verify current signed metadata before first send (requires encryption required)
+  --no-auto-gift-wrap     Disable automatic prehandshake lookup; explicit gift-wrap-mode always wins
   --payment-mode          Payment interaction mode: transparent (default), explicit_gating
   --stateless             Enable stateless transport mode (default)
   --stateful              Disable stateless transport mode

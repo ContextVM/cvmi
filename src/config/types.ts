@@ -73,6 +73,8 @@ export interface UseConfig {
   isStateless?: boolean;
   /** Gift-wrap policy for direct calls; omit to retain the SDK default */
   giftWrapMode?: GiftWrapMode;
+  /** Opt-in signed prehandshake lookup; explicit giftWrapMode wins. */
+  autoGiftWrap?: boolean;
 }
 
 /**
@@ -93,6 +95,8 @@ export interface ServerTargetConfig {
   encryption?: EncryptionMode;
   /** Gift-wrap policy for direct calls; overrides use.giftWrapMode */
   giftWrapMode?: GiftWrapMode;
+  /** Opt-in signed prehandshake lookup; explicit giftWrapMode wins. */
+  autoGiftWrap?: boolean;
   /** Whether to use stateless transport mode */
   isStateless?: boolean;
   /** Optional display description */

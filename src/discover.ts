@@ -1,3 +1,4 @@
+import { currentDiscoveryEvents, verifiedAnnouncement } from './announcement.ts';
 import { nip19, SimplePool, type Event } from 'nostr-tools';
 import { DEFAULT_RELAYS } from './config/index.ts';
 import { BOLD, CYAN, DIM, RESET } from './constants/ui.ts';
@@ -28,6 +29,7 @@ interface DiscoveredServer {
   about?: string;
   website?: string;
   supportsEncryption?: boolean;
+  supportsEphemeralEncryption?: boolean;
   eventId: string;
   createdAt: number;
 }
@@ -43,7 +45,11 @@ function formatDisplayPubkey(pubkey: string): string {
 function parseAnnouncement(event: Event, relay: string): DiscoveredServer {
   let content: Record<string, unknown> = {};
   try {
-    content = event.content ? (JSON.parse(event.content) as Record<string, unknown>) : {};
+    const decoded: unknown = event.content ? JSON.parse(event.content) : {};
+    content =
+      decoded && typeof decoded === 'object' && !Array.isArray(decoded)
+        ? (decoded as Record<string, unknown>)
+        : {};
   } catch {
     content = {};
   }
@@ -71,6 +77,7 @@ function parseAnnouncement(event: Event, relay: string): DiscoveredServer {
     (typeof nestedInfo?.website === 'string' ? nestedInfo.website : undefined) ??
     tagValue('website');
   const supportsEncryption =
+    event.tags.some((tag) => tag.length === 1 && tag[0] === 'support_encryption') ||
     tagValue('support_encryption') === 'true' ||
     content.support_encryption === true ||
     nestedInfo?.support_encryption === true;
@@ -82,6 +89,9 @@ function parseAnnouncement(event: Event, relay: string): DiscoveredServer {
     about,
     website,
     supportsEncryption,
+    supportsEphemeralEncryption: event.tags.some(
+      (tag) => tag.length === 1 && tag[0] === 'support_encryption_ephemeral'
+    ),
     eventId: event.id,
     createdAt: event.created_at,
   };
@@ -101,6 +111,7 @@ function mergeServers(
     about: latest.about ?? existing.about,
     website: latest.website ?? existing.website,
     supportsEncryption: latest.supportsEncryption ?? existing.supportsEncryption,
+    supportsEphemeralEncryption: latest.supportsEphemeralEncryption,
   };
 }
 
@@ -162,7 +173,7 @@ export function parseDiscoverArgs(args: string[]): ParseDiscoverResult {
   return result;
 }
 
-async function queryRelay(relay: string): Promise<DiscoveredServer[]> {
+async function queryRelay(relay: string): Promise<Event[]> {
   const pool = new SimplePool();
 
   try {
@@ -171,7 +182,7 @@ async function queryRelay(relay: string): Promise<DiscoveredServer[]> {
       { kinds: [SERVER_ANNOUNCEMENT_KIND] },
       { maxWait: DISCOVER_TIMEOUT_MS }
     );
-    return events.map((event) => parseAnnouncement(event, relay));
+    return events;
   } finally {
     pool.close([relay]);
   }
@@ -185,11 +196,26 @@ export async function discover(options: DiscoverOptions): Promise<void> {
   }
 
   const merged = new Map<string, DiscoveredServer>();
-  for (const relay of relays) {
-    const servers = await queryRelay(relay);
-    for (const server of servers) {
-      merged.set(server.pubkey, mergeServers(merged.get(server.pubkey), server));
+  const observed: Array<{ relay: string; event: Event }> = [];
+  for (const relay of relays)
+    for (const event of await queryRelay(relay)) observed.push({ relay, event });
+  // Select the newest authentic record globally before expiry; a second relay's older
+  // announcement cannot revive a newer signed withdrawal or expired record.
+  const current = new Map(
+    currentDiscoveryEvents(observed.map((r) => r.event)).map((e) => [e.id, e])
+  );
+  for (const { relay, event } of observed) {
+    // Confirm the contributing relay actually supplied these signed bytes.
+    let authentic: Event | undefined;
+    try {
+      authentic = verifiedAnnouncement(event);
+    } catch {
+      continue;
     }
+    const verified = authentic ? current.get(authentic.id) : undefined;
+    if (!verified) continue;
+    const server = parseAnnouncement(verified, relay);
+    merged.set(server.pubkey, mergeServers(merged.get(server.pubkey), server));
   }
 
   let results = [...merged.values()].sort((a, b) => b.createdAt - a.createdAt);

@@ -153,6 +153,32 @@ the custom > project > global precedence described above. For example:
 Use the server's documented policy to select a mode. An announcement advertising
 ephemeral support does not necessarily mean that persistent wrapping is rejected.
 
+### Verified prehandshake selection (opt-in)
+
+```sh
+cvmi call <discovered-server-key> --relays wss://your-configured-relay --encryption-mode required --auto-gift-wrap
+```
+
+This opt-in verifies current kind 11316 metadata for the selected public key before
+sending the first MCP message. Signed presence-only ephemeral support selects 21059;
+a current encryption-only announcement selects 1059. Support is not a requirement
+or a statement about the operator's identity. Display-only legacy tag/prose values
+are never automatic trust inputs. `use.autoGiftWrap` or a server alias may enable it;
+CLI > alias > use precedence applies. `--no-auto-gift-wrap` opts out. Any effective
+explicit `giftWrapMode`, including `optional`, overrides automatic selection.
+Omitting both settings leaves the SDK default unchanged.
+
+All explicitly selected relays must complete their bounded query. Missing, forged,
+expired, more-than-one-day-old, future-dated or conflicting latest metadata stops
+before MCP; it does not trigger a persistent/plaintext retry. This is a conservative
+local freshness policy, not a universal server renewal requirement. Three relays,
+64 candidate events, 64 KiB/event, 1 MiB received frames/relay and four seconds bound
+each lookup. WebSocket frame assembly precedes the application byte check; this is
+not a network/kernel memory or billing quota. No additional URLs in metadata are
+followed, no relay AUTH is signed, and no credential or admission is created.
+Encryption must already be `required`; the option never changes encryption or payment
+policy. A later transport timeout is not proof the server is down or uses a wrong mode.
+
 ### `cvmi cn`
 
 [`cvmi cn`](src/cn/index.ts) is fully integrated into `cvmi` (formerly `ctxcn`). It allows you to generate type-safe TypeScript clients directly from a Nostr MCP server.
