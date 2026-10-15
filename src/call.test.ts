@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { EncryptionMode } from '@contextvm/sdk';
+import { EncryptionMode, GiftWrapMode } from '@contextvm/sdk';
 import type { Progress } from '@modelcontextprotocol/sdk/types.js';
 import {
   __test__,
@@ -43,6 +43,67 @@ async function captureConsoleOutputAsync(render: () => Promise<void>): Promise<s
 }
 
 describe('parseCallArgs', () => {
+  it.each(Object.values(GiftWrapMode))(
+    'parses gift-wrap mode %s with existing arguments',
+    (mode) => {
+      const parsed = parseCallArgs([
+        'weather',
+        'tool:ping',
+        'count=2',
+        '--gift-wrap-mode',
+        mode,
+        '--encryption-mode',
+        'required',
+        '--stateful',
+        '--payment-mode',
+        'transparent',
+      ]);
+      expect(parsed.giftWrapMode).toBe(mode);
+      expect(parsed.input).toEqual({ count: 2 });
+      expect(parsed.encryption).toBe(EncryptionMode.REQUIRED);
+      expect(parsed.isStateless).toBe(false);
+      expect(parsed.paymentMode).toBe('transparent');
+      expect(parsed.unknownFlags).toEqual([]);
+    }
+  );
+
+  it('leaves the gift-wrap policy unspecified by default', () => {
+    const parsed = parseCallArgs(['weather']);
+    expect(parsed.giftWrapMode).toBeUndefined();
+    expect(parsed.encryption).toBeUndefined();
+    expect(parsed.isStateless).toBeUndefined();
+    expect(parsed.paymentMode).toBe('transparent');
+  });
+
+  it.each(['invalid', 'EPHEMERAL', ''])('rejects unsupported gift-wrap value %j', (value) => {
+    const parsed = parseCallArgs(['weather', '--gift-wrap-mode', value]);
+    expect(parsed.giftWrapMode).toBeUndefined();
+    expect(parsed.unknownFlags).toEqual([
+      `--gift-wrap-mode (${value}; expected optional, persistent, or ephemeral)`,
+    ]);
+  });
+
+  it.each([{ rest: [] }, { rest: ['--raw'] }])(
+    'reports a missing gift-wrap value without consuming the next flag',
+    ({ rest }) => {
+      const parsed = parseCallArgs(['weather', '--gift-wrap-mode', ...rest]);
+      expect(parsed.giftWrapMode).toBeUndefined();
+      expect(parsed.unknownFlags).toEqual(['--gift-wrap-mode (missing value)']);
+      expect(parsed.raw).toBe(rest.length > 0);
+    }
+  );
+
+  it('uses the last explicit gift-wrap option', () => {
+    const parsed = parseCallArgs([
+      'weather',
+      '--gift-wrap-mode',
+      'ephemeral',
+      '--gift-wrap-mode',
+      'optional',
+    ]);
+    expect(parsed.giftWrapMode).toBe(GiftWrapMode.OPTIONAL);
+  });
+
   it('parses server, capability, flags, and key=value input', () => {
     const parsed = parseCallArgs([
       'weather',
@@ -958,5 +1019,53 @@ Or pass a direct server identity in hex, npub, or nprofile format.]`);
       error.code = -32601;
       expect(__test__.isPaymentRequiredError(error)).toBe(false);
     });
+  });
+});
+
+describe('gift-wrap configuration', () => {
+  const config = {
+    use: { giftWrapMode: GiftWrapMode.EPHEMERAL },
+    servers: { weather: { pubkey: 'a'.repeat(64), giftWrapMode: GiftWrapMode.PERSISTENT } },
+  };
+
+  it('prefers an explicit CLI optional mode over alias and shared settings', () => {
+    expect(
+      __test__.resolveServerTarget(config, 'weather', { giftWrapMode: GiftWrapMode.OPTIONAL })
+        .giftWrapMode
+    ).toBe(GiftWrapMode.OPTIONAL);
+  });
+
+  it('prefers the named server policy over the shared policy', () => {
+    expect(__test__.resolveServerTarget(config, 'weather', {}).giftWrapMode).toBe(
+      GiftWrapMode.PERSISTENT
+    );
+  });
+
+  it('uses the shared policy for direct identities and aliases without an override', () => {
+    expect(__test__.resolveServerTarget(config, 'b'.repeat(64), {}).giftWrapMode).toBe(
+      GiftWrapMode.EPHEMERAL
+    );
+    expect(
+      __test__.resolveServerTarget(
+        { use: config.use, servers: { weather: { pubkey: 'a'.repeat(64) } } },
+        'weather',
+        {}
+      ).giftWrapMode
+    ).toBe(GiftWrapMode.EPHEMERAL);
+  });
+
+  it('retains the SDK default when every source omits the policy', () => {
+    expect(__test__.resolveServerTarget({}, 'a'.repeat(64), {}).giftWrapMode).toBeUndefined();
+  });
+
+  it('rejects invalid effective JSON policies before creating a transport', () => {
+    for (const invalid of [
+      { use: { giftWrapMode: 'invalid' } },
+      { servers: { weather: { pubkey: 'a'.repeat(64), giftWrapMode: 42 } } },
+    ]) {
+      expect(() => __test__.resolveServerTarget(invalid as never, 'weather', {})).toThrow(
+        'Invalid giftWrapMode: expected optional, persistent, or ephemeral.'
+      );
+    }
   });
 });

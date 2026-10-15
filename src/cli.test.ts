@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { runCliOutput, stripLogo, hasLogo } from './test-utils.ts';
+import { runCli, runCliOutput, stripLogo, hasLogo } from './test-utils.ts';
 
 describe('skills CLI', () => {
   const originalCwd = process.cwd();
@@ -49,6 +49,32 @@ describe('skills CLI', () => {
         readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf-8')
       );
       expect(output.trim()).toBe(pkg.version);
+    });
+  });
+
+  describe('call gift-wrap option', () => {
+    it.each(['optional', 'persistent', 'ephemeral'])(
+      'accepts %s and documents the option',
+      (mode) => {
+        const result = runCli(['call', '--gift-wrap-mode', mode, '--help']);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain('--gift-wrap-mode <mode>');
+        expect(result.stdout).toContain('optional, persistent, ephemeral (default: SDK policy)');
+      }
+    );
+
+    it('rejects an unsupported policy before connecting', () => {
+      const result = runCli(['call', 'a'.repeat(64), '--gift-wrap-mode', 'invalid']);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        '--gift-wrap-mode (invalid; expected optional, persistent, or ephemeral)'
+      );
+    });
+
+    it('rejects a missing policy value', () => {
+      const result = runCli(['call', '--gift-wrap-mode']);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain('--gift-wrap-mode (missing value)');
     });
   });
 

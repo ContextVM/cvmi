@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { GiftWrapMode } from '@contextvm/sdk';
 
 // Helper to import loader AFTER mocks are applied.
 async function importLoader() {
@@ -84,6 +85,26 @@ describe('Config Precedence', () => {
     const config = await loadConfig({ serve: { privateKey: 'cli-key' } }, customConfigPath);
     expect(config.serve?.privateKey).toBe('cli-key');
     expect(config.serve?.relays).toEqual(['wss://custom.relay']);
+  });
+
+  it('merges gift-wrap settings by source priority and preserves omitted values', async () => {
+    const { loadConfig, getConfigPaths } = await importLoader();
+    const paths = getConfigPaths(customConfigPath);
+    expect(paths.globalConfig).toContain(baseDir);
+    await mkdir(paths.globalDir, { recursive: true });
+    await writeFile(paths.globalConfig, JSON.stringify({ use: { giftWrapMode: 'persistent' } }));
+    expect((await loadConfig()).use?.giftWrapMode).toBe(GiftWrapMode.PERSISTENT);
+    await writeFile(projectConfigPath, JSON.stringify({ use: { giftWrapMode: 'ephemeral' } }));
+    expect((await loadConfig()).use?.giftWrapMode).toBe(GiftWrapMode.EPHEMERAL);
+    await writeFile(customConfigPath, JSON.stringify({ use: { giftWrapMode: 'optional' } }));
+    expect((await loadConfig({}, customConfigPath)).use?.giftWrapMode).toBe(GiftWrapMode.OPTIONAL);
+    expect(
+      (await loadConfig({ use: { giftWrapMode: GiftWrapMode.PERSISTENT } }, customConfigPath)).use
+        ?.giftWrapMode
+    ).toBe(GiftWrapMode.PERSISTENT);
+    expect(
+      (await loadConfig({ use: { giftWrapMode: undefined } }, customConfigPath)).use?.giftWrapMode
+    ).toBe(GiftWrapMode.OPTIONAL);
   });
 
   it('ignores private keys from JSON files and still merges non-secret fields by precedence', async () => {

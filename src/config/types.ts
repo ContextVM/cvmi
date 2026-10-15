@@ -2,7 +2,12 @@
  * Simplified configuration types for cvmi CLI.
  * Uses SDK types directly where possible.
  */
-import type { ServerInfo, EncryptionMode, ServerPaymentsOptions } from '@contextvm/sdk';
+import type {
+  ServerInfo,
+  EncryptionMode,
+  GiftWrapMode,
+  ServerPaymentsOptions,
+} from '@contextvm/sdk';
 
 /**
  * CEP-8 server-side payments for the serve gateway. Derives from the SDK's
@@ -66,6 +71,8 @@ export interface UseConfig {
   encryption?: EncryptionMode;
   /** Whether to use stateless transport mode */
   isStateless?: boolean;
+  /** Gift-wrap policy for direct calls; omit to retain the SDK default */
+  giftWrapMode?: GiftWrapMode;
 }
 
 /**
@@ -84,6 +91,8 @@ export interface ServerTargetConfig {
   relays?: string[];
   /** Encryption mode for communications */
   encryption?: EncryptionMode;
+  /** Gift-wrap policy for direct calls; overrides use.giftWrapMode */
+  giftWrapMode?: GiftWrapMode;
   /** Whether to use stateless transport mode */
   isStateless?: boolean;
   /** Optional display description */

@@ -122,6 +122,37 @@ cvmi call weather tool:weather.get_current city=Lisbon
 cvmi call weather tool:weather.get_current city=Lisbon --config ./custom.cvmi.json
 ```
 
+For a server that requires ephemeral encrypted gift wrapping, select it explicitly:
+
+```bash
+cvmi call weather tool:weather.get_current city=Lisbon --encryption-mode required --gift-wrap-mode ephemeral
+```
+
+`--gift-wrap-mode <optional|persistent|ephemeral>` sets the SDK's gift-wrap policy for
+the connection, including its first request. `persistent` uses kind 1059;
+`ephemeral` uses kind 21059. `optional` lets the SDK choose based on peer
+capabilities. Omitting the setting preserves the existing SDK default. This
+setting does not change encryption requirements or signature verification.
+
+For direct calls, the setting resolves in this order: the CLI flag,
+`servers.<alias>.giftWrapMode`, then `use.giftWrapMode`. JSON configuration retains
+the custom > project > global precedence described above. For example:
+
+```json
+{
+  "servers": {
+    "weather": {
+      "pubkey": "npub1...",
+      "encryption": "required",
+      "giftWrapMode": "ephemeral"
+    }
+  }
+}
+```
+
+Use the server's documented policy to select a mode. An announcement advertising
+ephemeral support does not necessarily mean that persistent wrapping is rejected.
+
 ### `cvmi cn`
 
 [`cvmi cn`](src/cn/index.ts) is fully integrated into `cvmi` (formerly `ctxcn`). It allows you to generate type-safe TypeScript clients directly from a Nostr MCP server.
