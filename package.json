@@ -93,11 +93,11 @@
   "license": "MIT",
   "dependencies": {
     "@contextvm/sdk": "^0.13.9",
-    "@modelcontextprotocol/sdk": "^1.29",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "json-schema-to-typescript": "15.0.4",
     "nostr-tools": "^2.23.9",
     "xdg-basedir": "^5.1.0",
-    "zod": "^4.3.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
@@ -109,13 +109,14 @@
     "obuild": "^0.4.32",
     "picocolors": "^1.1.1",
     "prettier": "^3.8.1",
-    "simple-git": "^3.33.0",
+    "simple-git": "^4.1.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.12",
+    "vite": "^8.3.8"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^22.23.4 || >=24.22.1"
   },
   "packageManager": "pnpm@10.17.1"
 }

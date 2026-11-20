@@ -1,4 +1,4 @@
-import matter from 'gray-matter';
+import { parseSkillFrontmatter } from './frontmatter.ts';
 import type { MintlifySkill } from './types.ts';
 
 /**
@@ -22,7 +22,7 @@ export async function fetchMintlifySkill(url: string): Promise<MintlifySkill | n
     }
 
     const content = await response.text();
-    const { data } = matter(content);
+    const { data } = parseSkillFrontmatter(content);
 
     // Must have mintlify-proj in metadata
     const mintlifySite = data.metadata?.['mintlify-proj'];
