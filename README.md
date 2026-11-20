@@ -6,6 +6,10 @@
 
 ## Quick Start
 
+Use a maintained, patched Node release: at least 22.23.4 on Node 22, or
+24.22.1 on Node 24. Bun users need 1.4.4 or later. Keep the host operating
+system patched alongside CLI dependencies.
+
 ```bash
 # Install ContextVM skills interactively
 npx cvmi add
@@ -13,6 +17,10 @@ npx cvmi add
 # Install a specific skill from the ContextVM repository
 npx cvmi add --skill overview
 ```
+
+`cvmi serve <http-url>` rejects HTTP redirects for GET, POST, and DELETE;
+configure the final MCP URL directly. Skill metadata supports YAML and JSON
+frontmatter. JavaScript frontmatter is rejected without execution.
 
 ## Roadmap
 

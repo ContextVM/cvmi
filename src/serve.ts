@@ -76,7 +76,7 @@ function createStdioMcpTransport(
   });
 }
 
-function createStreamableHttpMcpTransport(target: string): Transport {
+function createStreamableHttpMcpTransport(target: string): StreamableHTTPClientTransport {
   const url = new URL(target);
 
   // Streamable HTTP transport *optionally* supports GET (SSE stream) as a push channel.
@@ -87,7 +87,7 @@ function createStreamableHttpMcpTransport(target: string): Transport {
     fetch: async (input, init) => {
       const method = (init?.method ?? 'GET').toUpperCase();
       if (method !== 'GET') {
-        return fetch(input, init);
+        return fetch(input, { ...init, redirect: 'error' });
       }
 
       const controller = new AbortController();
@@ -95,10 +95,14 @@ function createStreamableHttpMcpTransport(target: string): Transport {
       try {
         const response = await fetch(input, {
           ...init,
-          signal: controller.signal,
+          redirect: 'error',
+          signal: init?.signal
+            ? AbortSignal.any([init.signal, controller.signal])
+            : controller.signal,
         });
         return response;
       } catch {
+        if (init?.signal?.aborted) throw init.signal.reason;
         // Treat GET SSE failures/timeouts as "GET not supported".
         return new Response(null, { status: 405, statusText: 'Method Not Allowed' });
       } finally {
@@ -112,6 +116,7 @@ function createStreamableHttpMcpTransport(target: string): Transport {
 export const __test__ = {
   isHttpUrl,
   createStdioMcpTransport,
+  createStreamableHttpMcpTransport,
   splitCommandString,
   normalizeCommandAndArgs,
   getDefaultEnvironment,
