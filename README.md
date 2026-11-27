@@ -14,6 +14,17 @@ npx cvmi add
 npx cvmi add --skill overview
 ```
 
+Or use Nix (with flakes enabled):
+
+```bash
+# Run without installing
+nix run github:ContextVM/cvmi -- --help
+
+# Install the CLI
+nix profile add github:ContextVM/cvmi#cvmi
+cvmi --help
+```
+
 ## Roadmap
 
 - [x] `cvmi add` - Install skills with interactive picker
@@ -205,6 +216,24 @@ cvmi serve -e LOG_LEVEL=debug -- npx -y @modelcontextprotocol/server-filesystem 
 You can also set it in config under `serve.env`.
 
 Note: The CLI auto-generates a private key if none is provided. Keys can be specified in hex format (with or without `0x` prefix) or NIP-19 bech32 format (`nsec1...` for private keys, `npub1...` for public keys).
+
+## Nix development
+
+Supports x86_64/aarch64 Linux and aarch64 macOS. The package provides `cvmi` and
+`contextvm` with Node.js, Git, and SSH; MCP backend executables are supplied separately.
+
+```bash
+nix shell github:ContextVM/cvmi#cvmi # Temporary CLI shell
+nix develop                     # Development tools (from a checkout)
+nix build                       # Build ./result/bin/cvmi
+nix flake check                  # Validate the flake and package
+nix fmt                         # Format Nix files
+```
+
+`flake.lock` pins nixpkgs; update with `nix flake update nixpkgs`.
+Source whitelists in `nix/package.nix` keep unrelated edits from invalidating builds.
+After dependency changes, set `pnpmDeps.hash` to `lib.fakeHash`, run `nix build`,
+replace it with the reported hash, and rebuild.
 
 ## License
 
